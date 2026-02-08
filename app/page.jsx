@@ -1,17 +1,30 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo, useLayoutEffect } from 'react';
+import { useEffect, useRef, useState, useMemo, useLayoutEffect, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { createAvatar } from '@dicebear/core';
+import { glass } from '@dicebear/collection';
 import Announcement from "./components/Announcement";
 import zhifubaoImg from "./assets/zhifubao.jpg";
 import weixinImg from "./assets/weixin.jpg";
 import githubImg from "./assets/github.svg";
 import { supabase } from './lib/supabase';
+import packageJson from '../package.json';
 
 function PlusIcon(props) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
       <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function UpdateIcon(props) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="7 10 12 15 17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -332,7 +345,7 @@ function DatePicker({ value, onChange }) {
 }
 
 function DonateTabs() {
-  const [method, setMethod] = useState('alipay'); // alipay, wechat
+  const [method, setMethod] = useState('wechat'); // alipay, wechat
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
@@ -459,7 +472,7 @@ function Stat({ label, value, delta }) {
   );
 }
 
-function FeedbackModal({ onClose }) {
+function FeedbackModal({ onClose, user }) {
   const [submitting, setSubmitting] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
   const [error, setError] = useState("");
@@ -550,7 +563,7 @@ function FeedbackModal({ onClose }) {
                 style={{ width: '100%' }}
               />
             </div>
-
+            <input type="hidden" name="email" value={user?.email || ''} />
             <div className="form-group" style={{ marginBottom: 20 }}>
               <label htmlFor="message" className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
                 反馈内容
@@ -1185,14 +1198,15 @@ function SuccessModal({ message, onClose }) {
   );
 }
 
-function CloudConfigModal({ onConfirm, onCancel }) {
+function CloudConfigModal({ onConfirm, onCancel, type = 'empty' }) {
+  const isConflict = type === 'conflict';
   return (
     <motion.div
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="云端同步提示"
-      onClick={onCancel}
+      aria-label={isConflict ? "配置冲突提示" : "云端同步提示"}
+      onClick={isConflict ? undefined : onCancel}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -1208,21 +1222,25 @@ function CloudConfigModal({ onConfirm, onCancel }) {
         <div className="title" style={{ marginBottom: 12, justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <CloudIcon width="20" height="20" />
-            <span>云端暂无配置</span>
+            <span>{isConflict ? '发现配置冲突' : '云端暂无配置'}</span>
           </div>
-          <button className="icon-button" onClick={onCancel} style={{ border: 'none', background: 'transparent' }}>
-            <CloseIcon width="20" height="20" />
-          </button>
+          {!isConflict && (
+            <button className="icon-button" onClick={onCancel} style={{ border: 'none', background: 'transparent' }}>
+              <CloseIcon width="20" height="20" />
+            </button>
+          )}
         </div>
         <p className="muted" style={{ marginBottom: 20, fontSize: '14px', lineHeight: '1.6' }}>
-          是否将本地配置同步到云端？
+          {isConflict
+            ? '检测到本地配置与云端不一致，请选择操作：'
+            : '是否将本地配置同步到云端？'}
         </p>
         <div className="row" style={{ flexDirection: 'column', gap: 12 }}>
           <button className="button" onClick={onConfirm}>
-            同步本地到云端
+            {isConflict ? '保留本地 (覆盖云端)' : '同步本地到云端'}
           </button>
           <button className="button secondary" onClick={onCancel}>
-            暂不同步
+            {isConflict ? '使用云端 (覆盖本地)' : '暂不同步'}
           </button>
         </div>
       </motion.div>
@@ -1607,7 +1625,7 @@ function CountUp({ value, prefix = '', suffix = '', decimals = 2, className = ''
 
     const start = previousValue.current;
     const end = value;
-    const duration = 1000; // 1秒动画
+    const duration = 600; // 0.6秒动画
     const startTime = performance.now();
 
     const animate = (currentTime) => {
@@ -1750,6 +1768,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const timerRef = useRef(null);
   const refreshingRef = useRef(false);
+  const isLoggingOutRef = useRef(false);
 
   // 刷新频率状态
   const [refreshMs, setRefreshMs] = useState(30000);
@@ -1788,6 +1807,14 @@ export default function HomePage() {
   const [loginSuccess, setLoginSuccess] = useState('');
   const [loginOtp, setLoginOtp] = useState('');
 
+  const userAvatar = useMemo(() => {
+    if (!user?.id) return '';
+    return createAvatar(glass, {
+      seed: user.id,
+      size: 80
+    }).toDataUri();
+  }, [user?.id]);
+
   // 反馈弹窗状态
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackNonce, setFeedbackNonce] = useState(0);
@@ -1825,6 +1852,36 @@ export default function HomePage() {
       window.addEventListener('resize', checkMobile);
       return () => window.removeEventListener('resize', checkMobile);
     }
+  }, []);
+
+  // 检查更新
+  const [hasUpdate, setHasUpdate] = useState(false);
+  const [latestVersion, setLatestVersion] = useState('');
+  const [updateContent, setUpdateContent] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const res = await fetch('https://api.github.com/repos/hzm0321/real-time-fund/releases/latest');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.tag_name) {
+          const remoteVersion = data.tag_name.replace(/^v/, '');
+          if (remoteVersion !== packageJson.version) {
+            setHasUpdate(true);
+            setLatestVersion(remoteVersion);
+            setUpdateContent(data.body || '');
+          }
+        }
+      } catch (e) {
+        console.error('Check update failed:', e);
+      }
+    };
+
+    checkUpdate();
+    const interval = setInterval(checkUpdate, 10 * 60 * 1000); // 10 minutes
+    return () => clearInterval(interval);
   }, []);
 
   // 存储当前被划开的基金代码
@@ -2029,7 +2086,7 @@ export default function HomePage() {
       } else {
         next[code] = data;
       }
-      localStorage.setItem('holdings', JSON.stringify(next));
+      storageHelper.setItem('holdings', JSON.stringify(next));
       return next;
     });
     setHoldingModal({ open: false, fund: null });
@@ -2118,6 +2175,19 @@ export default function HomePage() {
 
   // 成功提示弹窗
   const [successModal, setSuccessModal] = useState({ open: false, message: '' });
+  // 轻提示 (Toast)
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' }); // type: 'info' | 'success' | 'error'
+  const toastTimeoutRef = useRef(null);
+
+  const showToast = (message, type = 'info') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ show: true, message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 3000);
+  };
+
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [cloudConfigModal, setCloudConfigModal] = useState({ open: false, userId: null });
   const syncDebounceRef = useRef(null);
   const lastSyncedRef = useRef('');
@@ -2138,51 +2208,59 @@ export default function HomePage() {
     userIdRef.current = user?.id || null;
   }, [user]);
 
+  const scheduleSync = useCallback(() => {
+    if (!userIdRef.current) return;
+    if (skipSyncRef.current) return;
+    if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
+    syncDebounceRef.current = setTimeout(() => {
+      const payload = collectLocalPayload();
+      const next = getComparablePayload(payload);
+      if (next === lastSyncedRef.current) return;
+      lastSyncedRef.current = next;
+      syncUserConfig(userIdRef.current, false);
+    }, 2000);
+  }, []);
+
+  const storageHelper = useMemo(() => {
+    const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings']);
+    const triggerSync = (key) => {
+      if (keys.has(key)) {
+        if (!skipSyncRef.current) {
+          window.localStorage.setItem('localUpdatedAt', new Date().toISOString());
+        }
+        scheduleSync();
+      }
+    };
+    return {
+      setItem: (key, value) => {
+        window.localStorage.setItem(key, value);
+        triggerSync(key);
+      },
+      removeItem: (key) => {
+        window.localStorage.removeItem(key);
+        triggerSync(key);
+      },
+      clear: () => {
+        window.localStorage.clear();
+        if (!skipSyncRef.current) {
+          window.localStorage.setItem('localUpdatedAt', new Date().toISOString());
+        }
+        scheduleSync();
+      }
+    };
+  }, [scheduleSync]);
+
   useEffect(() => {
     const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings']);
-    const scheduleSync = () => {
-      if (!userIdRef.current) return;
-      if (skipSyncRef.current) return;
-      if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
-      syncDebounceRef.current = setTimeout(() => {
-        const payload = collectLocalPayload();
-        const next = getComparablePayload(payload);
-        if (next === lastSyncedRef.current) return;
-        lastSyncedRef.current = next;
-        syncUserConfig(userIdRef.current, false);
-      }, 9000);
-    };
-
-    const originalSetItem = localStorage.setItem.bind(localStorage);
-    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
-    const originalClear = localStorage.clear.bind(localStorage);
-
-    localStorage.setItem = (key, value) => {
-      originalSetItem(key, value);
-      if (keys.has(key)) scheduleSync();
-    };
-    localStorage.removeItem = (key) => {
-      originalRemoveItem(key);
-      if (keys.has(key)) scheduleSync();
-    };
-    localStorage.clear = () => {
-      originalClear();
-      scheduleSync();
-    };
-
     const onStorage = (e) => {
       if (!e.key || keys.has(e.key)) scheduleSync();
     };
     window.addEventListener('storage', onStorage);
-
     return () => {
-      localStorage.setItem = originalSetItem;
-      localStorage.removeItem = originalRemoveItem;
-      localStorage.clear = originalClear;
       window.removeEventListener('storage', onStorage);
       if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     };
-  }, []);
+  }, [scheduleSync]);
 
   const toggleFavorite = (code) => {
     setFavorites(prev => {
@@ -2192,7 +2270,7 @@ export default function HomePage() {
       } else {
         next.add(code);
       }
-      localStorage.setItem('favorites', JSON.stringify(Array.from(next)));
+      storageHelper.setItem('favorites', JSON.stringify(Array.from(next)));
       if (next.size === 0) setCurrentTab('all');
       return next;
     });
@@ -2207,7 +2285,7 @@ export default function HomePage() {
         next.add(code);
       }
       // 同步到本地存储
-      localStorage.setItem('collapsedCodes', JSON.stringify(Array.from(next)));
+      storageHelper.setItem('collapsedCodes', JSON.stringify(Array.from(next)));
       return next;
     });
   };
@@ -2220,7 +2298,7 @@ export default function HomePage() {
     };
     const next = [...groups, newGroup];
     setGroups(next);
-    localStorage.setItem('groups', JSON.stringify(next));
+    storageHelper.setItem('groups', JSON.stringify(next));
     setCurrentTab(newGroup.id);
     setGroupModalOpen(false);
   };
@@ -2228,13 +2306,13 @@ export default function HomePage() {
   const handleRemoveGroup = (id) => {
     const next = groups.filter(g => g.id !== id);
     setGroups(next);
-    localStorage.setItem('groups', JSON.stringify(next));
+    storageHelper.setItem('groups', JSON.stringify(next));
     if (currentTab === id) setCurrentTab('all');
   };
 
   const handleUpdateGroups = (newGroups) => {
     setGroups(newGroups);
-    localStorage.setItem('groups', JSON.stringify(newGroups));
+    storageHelper.setItem('groups', JSON.stringify(newGroups));
     // 如果当前选中的分组被删除了，切换回“全部”
     if (currentTab !== 'all' && currentTab !== 'fav' && !newGroups.find(g => g.id === currentTab)) {
       setCurrentTab('all');
@@ -2253,7 +2331,7 @@ export default function HomePage() {
       return g;
     });
     setGroups(next);
-    localStorage.setItem('groups', JSON.stringify(next));
+    storageHelper.setItem('groups', JSON.stringify(next));
     setAddFundToGroupOpen(false);
     setSuccessModal({ open: true, message: `成功添加 ${codes.length} 支基金` });
   };
@@ -2269,7 +2347,7 @@ export default function HomePage() {
       return g;
     });
     setGroups(next);
-    localStorage.setItem('groups', JSON.stringify(next));
+    storageHelper.setItem('groups', JSON.stringify(next));
   };
 
   const toggleFundInGroup = (code, groupId) => {
@@ -2284,7 +2362,7 @@ export default function HomePage() {
       return g;
     });
     setGroups(next);
-    localStorage.setItem('groups', JSON.stringify(next));
+    storageHelper.setItem('groups', JSON.stringify(next));
   };
 
   // 按 code 去重，保留第一次出现的项，避免列表重复
@@ -2304,7 +2382,7 @@ export default function HomePage() {
       if (Array.isArray(saved) && saved.length) {
         const deduped = dedupeByCode(saved);
         setFunds(deduped);
-        localStorage.setItem('funds', JSON.stringify(deduped));
+        storageHelper.setItem('funds', JSON.stringify(deduped));
         const codes = Array.from(new Set(deduped.map((f) => f.code)));
         if (codes.length) refreshAll(codes);
       }
@@ -2338,24 +2416,66 @@ export default function HomePage() {
 
   // 初始化认证状态监听
   useEffect(() => {
-    // 获取当前 session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchCloudConfig(session.user.id);
-      }
-    });
+    const clearAuthState = () => {
+      setUser(null);
+      setUserMenuOpen(false);
+    };
 
-    // 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
+    const handleSession = async (session, event) => {
+      if (!session?.user) {
+        if (event === 'SIGNED_OUT' && !isLoggingOutRef.current) {
+          setLoginError('会话已过期，请重新登录');
+          setLoginModalOpen(true);
+        }
+        isLoggingOutRef.current = false;
+        clearAuthState();
+        return;
+      }
+      if (session.expires_at && session.expires_at * 1000 <= Date.now()) {
+        isLoggingOutRef.current = true;
+        await supabase.auth.signOut({ scope: 'local' });
+        try {
+          const storageKeys = Object.keys(localStorage);
+          storageKeys.forEach((key) => {
+            if (key === 'supabase.auth.token' || (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+              storageHelper.removeItem(key);
+            }
+          });
+        } catch { }
+        try {
+          const sessionKeys = Object.keys(sessionStorage);
+          sessionKeys.forEach((key) => {
+            if (key === 'supabase.auth.token' || (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+              sessionStorage.removeItem(key);
+            }
+          });
+        } catch { }
+        clearAuthState();
+        setLoginError('会话已过期，请重新登录');
+        showToast('会话已过期，请重新登录', 'error');
+        setLoginModalOpen(true);
+        return;
+      }
+      setUser(session.user);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         setLoginModalOpen(false);
         setLoginEmail('');
         setLoginSuccess('');
         setLoginError('');
-        fetchCloudConfig(session.user.id);
       }
+      fetchCloudConfig(session.user.id);
+    };
+
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      if (error) {
+        clearAuthState();
+        return;
+      }
+      await handleSession(data?.session ?? null, 'INITIAL_SESSION');
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      await handleSession(session ?? null, event);
     });
 
     return () => subscription.unsubscribe();
@@ -2370,14 +2490,14 @@ export default function HomePage() {
         if (!incoming || typeof incoming !== 'object') return;
         const incomingComparable = getComparablePayload(incoming);
         if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
-        await applyCloudConfig(incoming);
+        await applyCloudConfig(incoming, payload.new.updated_at);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
         const incoming = payload?.new?.data;
         if (!incoming || typeof incoming !== 'object') return;
         const incomingComparable = getComparablePayload(incoming);
         if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
-        await applyCloudConfig(incoming);
+        await applyCloudConfig(incoming, payload.new.updated_at);
       })
       .subscribe();
     return () => {
@@ -2453,17 +2573,45 @@ export default function HomePage() {
 
   // 登出
   const handleLogout = async () => {
+    isLoggingOutRef.current = true;
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error?.code === 'session_not_found') {
-        await supabase.auth.signOut({ scope: 'local' });
-      } else if (error) {
-        throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        if (error && error.code !== 'session_not_found') {
+          throw error;
+        }
       }
+    } catch (err) {
+      showToast(err.message, 'error')
+      console.error('登出失败', err);
+    } finally {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch { }
+      try {
+        const storageKeys = Object.keys(localStorage);
+        storageKeys.forEach((key) => {
+          if (key === 'supabase.auth.token' || (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+            storageHelper.removeItem(key);
+          }
+        });
+      } catch { }
+      try {
+        const sessionKeys = Object.keys(sessionStorage);
+        sessionKeys.forEach((key) => {
+          if (key === 'supabase.auth.token' || (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+            sessionStorage.removeItem(key);
+          }
+        });
+      } catch { }
+      setLoginModalOpen(false);
+      setLoginError('');
+      setLoginSuccess('');
+      setLoginEmail('');
+      setLoginOtp('');
       setUserMenuOpen(false);
       setUser(null);
-    } catch (err) {
-      console.error('登出失败', err);
     }
   };
 
@@ -2881,7 +3029,7 @@ export default function HomePage() {
       if (newFunds.length > 0) {
         const updated = dedupeByCode([...newFunds, ...funds]);
         setFunds(updated);
-        localStorage.setItem('funds', JSON.stringify(updated));
+        storageHelper.setItem('funds', JSON.stringify(updated));
       }
 
       setSelectedFunds([]);
@@ -2929,7 +3077,7 @@ export default function HomePage() {
             }
           });
           const deduped = dedupeByCode(merged);
-          localStorage.setItem('funds', JSON.stringify(deduped));
+          storageHelper.setItem('funds', JSON.stringify(deduped));
           return deduped;
         });
       }
@@ -2991,7 +3139,7 @@ export default function HomePage() {
       } else {
         const next = dedupeByCode([...newFunds, ...funds]);
         setFunds(next);
-        localStorage.setItem('funds', JSON.stringify(next));
+        storageHelper.setItem('funds', JSON.stringify(next));
       }
       setSearchTerm('');
       setSelectedFunds([]);
@@ -3010,7 +3158,7 @@ export default function HomePage() {
   const removeFund = (removeCode) => {
     const next = funds.filter((f) => f.code !== removeCode);
     setFunds(next);
-    localStorage.setItem('funds', JSON.stringify(next));
+    storageHelper.setItem('funds', JSON.stringify(next));
 
     // 同步删除分组中的失效代码
     const nextGroups = groups.map(g => ({
@@ -3018,14 +3166,14 @@ export default function HomePage() {
       codes: g.codes.filter(c => c !== removeCode)
     }));
     setGroups(nextGroups);
-    localStorage.setItem('groups', JSON.stringify(nextGroups));
+    storageHelper.setItem('groups', JSON.stringify(nextGroups));
 
     // 同步删除展开收起状态
     setCollapsedCodes(prev => {
       if (!prev.has(removeCode)) return prev;
       const nextSet = new Set(prev);
       nextSet.delete(removeCode);
-      localStorage.setItem('collapsedCodes', JSON.stringify(Array.from(nextSet)));
+      storageHelper.setItem('collapsedCodes', JSON.stringify(Array.from(nextSet)));
       return nextSet;
     });
 
@@ -3034,7 +3182,7 @@ export default function HomePage() {
       if (!prev.has(removeCode)) return prev;
       const nextSet = new Set(prev);
       nextSet.delete(removeCode);
-      localStorage.setItem('favorites', JSON.stringify(Array.from(nextSet)));
+      storageHelper.setItem('favorites', JSON.stringify(Array.from(nextSet)));
       if (nextSet.size === 0) setCurrentTab('all');
       return nextSet;
     });
@@ -3044,7 +3192,7 @@ export default function HomePage() {
       if (!prev[removeCode]) return prev;
       const next = { ...prev };
       delete next[removeCode];
-      localStorage.setItem('holdings', JSON.stringify(next));
+      storageHelper.setItem('holdings', JSON.stringify(next));
       return next;
     });
   };
@@ -3060,7 +3208,7 @@ export default function HomePage() {
     e?.preventDefault?.();
     const ms = Math.max(10, Number(tempSeconds)) * 1000;
     setRefreshMs(ms);
-    localStorage.setItem('refreshMs', String(ms));
+    storageHelper.setItem('refreshMs', String(ms));
     setSettingsOpen(false);
   };
 
@@ -3130,7 +3278,6 @@ export default function HomePage() {
         }))
         : [];
       return {
-        version: 1,
         funds,
         favorites: cleanedFavorites,
         groups: cleanedGroups,
@@ -3141,7 +3288,6 @@ export default function HomePage() {
       };
     } catch {
       return {
-        version: 1,
         funds: [],
         favorites: [],
         groups: [],
@@ -3153,30 +3299,33 @@ export default function HomePage() {
     }
   };
 
-  const applyCloudConfig = async (cloudData) => {
+  const applyCloudConfig = async (cloudData, cloudUpdatedAt) => {
     if (!cloudData || typeof cloudData !== 'object') return;
     skipSyncRef.current = true;
     try {
+      if (cloudUpdatedAt) {
+        storageHelper.setItem('localUpdatedAt', new Date(cloudUpdatedAt).toISOString());
+      }
       const nextFunds = Array.isArray(cloudData.funds) ? dedupeByCode(cloudData.funds) : [];
       setFunds(nextFunds);
-      localStorage.setItem('funds', JSON.stringify(nextFunds));
+      storageHelper.setItem('funds', JSON.stringify(nextFunds));
 
       const nextFavorites = Array.isArray(cloudData.favorites) ? cloudData.favorites : [];
       setFavorites(new Set(nextFavorites));
-      localStorage.setItem('favorites', JSON.stringify(nextFavorites));
+      storageHelper.setItem('favorites', JSON.stringify(nextFavorites));
 
       const nextGroups = Array.isArray(cloudData.groups) ? cloudData.groups : [];
       setGroups(nextGroups);
-      localStorage.setItem('groups', JSON.stringify(nextGroups));
+      storageHelper.setItem('groups', JSON.stringify(nextGroups));
 
       const nextCollapsed = Array.isArray(cloudData.collapsedCodes) ? cloudData.collapsedCodes : [];
       setCollapsedCodes(new Set(nextCollapsed));
-      localStorage.setItem('collapsedCodes', JSON.stringify(nextCollapsed));
+      storageHelper.setItem('collapsedCodes', JSON.stringify(nextCollapsed));
 
       const nextRefreshMs = Number.isFinite(cloudData.refreshMs) && cloudData.refreshMs >= 5000 ? cloudData.refreshMs : 30000;
       setRefreshMs(nextRefreshMs);
       setTempSeconds(Math.round(nextRefreshMs / 1000));
-      localStorage.setItem('refreshMs', String(nextRefreshMs));
+      storageHelper.setItem('refreshMs', String(nextRefreshMs));
 
       if (cloudData.viewMode === 'card' || cloudData.viewMode === 'list') {
         setViewMode(cloudData.viewMode);
@@ -3184,7 +3333,7 @@ export default function HomePage() {
 
       const nextHoldings = cloudData.holdings && typeof cloudData.holdings === 'object' ? cloudData.holdings : {};
       setHoldings(nextHoldings);
-      localStorage.setItem('holdings', JSON.stringify(nextHoldings));
+      storageHelper.setItem('holdings', JSON.stringify(nextHoldings));
 
       if (nextFunds.length) {
         const codes = Array.from(new Set(nextFunds.map((f) => f.code)));
@@ -3203,7 +3352,7 @@ export default function HomePage() {
     try {
       const { data, error } = await supabase
         .from('user_configs')
-        .select('id, data')
+        .select('id, data, updated_at')
         .eq('user_id', userId)
         .maybeSingle();
       if (error) throw error;
@@ -3212,33 +3361,66 @@ export default function HomePage() {
           .from('user_configs')
           .insert({ user_id: userId });
         if (insertError) throw insertError;
-        setCloudConfigModal({ open: true, userId });
+        setCloudConfigModal({ open: true, userId, type: 'empty' });
         return;
       }
       if (data?.data && typeof data.data === 'object' && Object.keys(data.data).length > 0) {
-        await applyCloudConfig(data.data);
+        const localPayload = collectLocalPayload();
+        const localComparable = getComparablePayload(localPayload);
+        const cloudComparable = getComparablePayload(data.data);
+
+        if (localComparable !== cloudComparable) {
+          // 如果数据不一致，无论时间戳如何，都提示用户
+          // 用户可以选择使用本地数据覆盖云端，或者使用云端数据覆盖本地
+          setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: data.data });
+          return;
+        }
+
+        await applyCloudConfig(data.data, data.updated_at);
         return;
       }
-      setCloudConfigModal({ open: true, userId });
+      setCloudConfigModal({ open: true, userId, type: 'empty' });
     } catch (e) {
       console.error('获取云端配置失败', e);
     }
   };
 
   const syncUserConfig = async (userId, showTip = true) => {
-    if (!userId) return;
+    if (!userId) {
+      showToast(`userId 不存在，请重新登录`, 'error');
+      return;
+    }
     try {
+      setIsSyncing(true);
       const payload = collectLocalPayload();
-      const { error: updateError } = await supabase
+      const now = new Date().toISOString();
+      const { data: upsertData, error: updateError } = await supabase
         .from('user_configs')
-        .update({ data: payload, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
+        .upsert(
+          { 
+            user_id: userId, 
+            data: payload, 
+            updated_at: now
+          }, 
+          { onConflict: 'user_id' }
+        )
+        .select();
+
       if (updateError) throw updateError;
+      if (!upsertData || upsertData.length === 0) {
+        throw new Error('同步失败：未写入任何数据，请检查账号状态或重新登录');
+      }
+      
+      storageHelper.setItem('localUpdatedAt', now);
+
       if (showTip) {
         setSuccessModal({ open: true, message: '已同步云端配置' });
       }
     } catch (e) {
       console.error('同步云端配置异常', e);
+      showToast(`同步云端配置异常:${e}`, 'error');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -3251,13 +3433,11 @@ export default function HomePage() {
   const exportLocalData = async () => {
     try {
       const payload = {
-        version: 1,
         funds: JSON.parse(localStorage.getItem('funds') || '[]'),
         favorites: JSON.parse(localStorage.getItem('favorites') || '[]'),
         groups: JSON.parse(localStorage.getItem('groups') || '[]'),
         collapsedCodes: JSON.parse(localStorage.getItem('collapsedCodes') || '[]'),
         refreshMs: parseInt(localStorage.getItem('refreshMs') || '30000', 10),
-        viewMode,
         holdings: JSON.parse(localStorage.getItem('holdings') || '{}'),
         exportedAt: new Date().toISOString()
       };
@@ -3322,13 +3502,13 @@ export default function HomePage() {
           appendedCodes = newItems.map(f => f.code);
           mergedFunds = [...currentFunds, ...newItems];
           setFunds(mergedFunds);
-          localStorage.setItem('funds', JSON.stringify(mergedFunds));
+          storageHelper.setItem('funds', JSON.stringify(mergedFunds));
         }
 
         if (Array.isArray(data.favorites)) {
           const mergedFav = Array.from(new Set([...currentFavorites, ...data.favorites]));
           setFavorites(new Set(mergedFav));
-          localStorage.setItem('favorites', JSON.stringify(mergedFav));
+          storageHelper.setItem('favorites', JSON.stringify(mergedFav));
         }
 
         if (Array.isArray(data.groups)) {
@@ -3346,19 +3526,19 @@ export default function HomePage() {
             }
           });
           setGroups(mergedGroups);
-          localStorage.setItem('groups', JSON.stringify(mergedGroups));
+          storageHelper.setItem('groups', JSON.stringify(mergedGroups));
         }
 
         if (Array.isArray(data.collapsedCodes)) {
           const mergedCollapsed = Array.from(new Set([...currentCollapsed, ...data.collapsedCodes]));
           setCollapsedCodes(new Set(mergedCollapsed));
-          localStorage.setItem('collapsedCodes', JSON.stringify(mergedCollapsed));
+          storageHelper.setItem('collapsedCodes', JSON.stringify(mergedCollapsed));
         }
 
         if (typeof data.refreshMs === 'number' && data.refreshMs >= 5000) {
           setRefreshMs(data.refreshMs);
           setTempSeconds(Math.round(data.refreshMs / 1000));
-          localStorage.setItem('refreshMs', String(data.refreshMs));
+          storageHelper.setItem('refreshMs', String(data.refreshMs));
         }
         if (data.viewMode === 'card' || data.viewMode === 'list') {
           setViewMode(data.viewMode);
@@ -3367,7 +3547,7 @@ export default function HomePage() {
         if (data.holdings && typeof data.holdings === 'object') {
           const mergedHoldings = { ...JSON.parse(localStorage.getItem('holdings') || '{}'), ...data.holdings };
           setHoldings(mergedHoldings);
-          localStorage.setItem('holdings', JSON.stringify(mergedHoldings));
+          storageHelper.setItem('holdings', JSON.stringify(mergedHoldings));
         }
 
         // 导入成功后，仅刷新新追加的基金
@@ -3406,7 +3586,8 @@ export default function HomePage() {
       tradeModal.open ||
       !!clearConfirm ||
       donateOpen ||
-      !!fundDeleteConfirm;
+      !!fundDeleteConfirm ||
+      updateModalOpen;
 
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -3431,7 +3612,8 @@ export default function HomePage() {
     actionModal.open,
     tradeModal.open,
     clearConfirm,
-    donateOpen
+    donateOpen,
+    updateModalOpen
   ]);
 
   useEffect(() => {
@@ -3460,8 +3642,47 @@ export default function HomePage() {
             <path d="M5 14c2-4 7-6 14-5" stroke="var(--primary)" strokeWidth="2" />
           </svg>
           <span>基估宝</span>
+          <AnimatePresence>
+            {isSyncing && (
+              <motion.div
+                key="sync-icon"
+                initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                animate={{ opacity: 1, width: 'auto', marginLeft: 8 }}
+                exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}
+                title="正在同步到云端..."
+              >
+                <motion.svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                >
+                  <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" stroke="var(--primary)" />
+                  <path d="M12 12v9" stroke="var(--accent)" />
+                  <path d="m16 16-4-4-4 4" stroke="var(--accent)" />
+                </motion.svg>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         <div className="actions">
+          {hasUpdate && (
+            <div
+              className="badge"
+              title={`发现新版本 ${latestVersion}，点击前往下载`}
+              style={{ cursor: 'pointer', borderColor: 'var(--success)', color: 'var(--success)' }}
+              onClick={() => setUpdateModalOpen(true)}
+            >
+              <UpdateIcon width="14" height="14" />
+            </div>
+          )}
           <img alt="项目Github地址" src={githubImg.src} style={{ width: '30px', height: '30px', cursor: 'pointer' }} onClick={() => window.open("https://github.com/hzm0321/real-time-fund")} />
           <div className="badge" title="当前刷新频率">
             <span>刷新</span>
@@ -3477,17 +3698,17 @@ export default function HomePage() {
           >
             <RefreshIcon className={refreshing ? 'spin' : ''} width="18" height="18" />
           </button>
-          <button
-            className="icon-button"
-            aria-label="打开设置"
-            onClick={() => setSettingsOpen(true)}
-            title="设置"
-          >
-            <SettingsIcon width="18" height="18" />
-          </button>
-
-          {/* 临时隐藏用户菜单入口 */}
-          <div className="user-menu-container" ref={userMenuRef} hidden>
+          {/*<button*/}
+          {/*  className="icon-button"*/}
+          {/*  aria-label="打开设置"*/}
+          {/*  onClick={() => setSettingsOpen(true)}*/}
+          {/*  title="设置"*/}
+          {/*  hidden*/}
+          {/*>*/}
+          {/*  <SettingsIcon width="18" height="18" />*/}
+          {/*</button>*/}
+          {/* 用户菜单 */}
+          <div className="user-menu-container" ref={userMenuRef}>
             <button
               className={`icon-button user-menu-trigger ${user ? 'logged-in' : ''}`}
               aria-label={user ? '用户菜单' : '登录'}
@@ -3496,7 +3717,15 @@ export default function HomePage() {
             >
               {user ? (
                 <div className="user-avatar-small">
-                  {user.email?.charAt(0).toUpperCase() || 'U'}
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt="用户头像"
+                      style={{ width: '100%', height: '100%', borderRadius: '50%' }}
+                    />
+                  ) : (
+                    (user.email?.charAt(0).toUpperCase() || 'U')
+                  )}
                 </div>
               ) : (
                 <UserIcon width="18" height="18" />
@@ -3517,7 +3746,15 @@ export default function HomePage() {
                     <>
                       <div className="user-menu-header">
                         <div className="user-avatar-large">
-                          {user.email?.charAt(0).toUpperCase() || 'U'}
+                          {userAvatar ? (
+                            <img
+                              src={userAvatar}
+                              alt="用户头像"
+                              style={{ width: '100%', height: '100%', borderRadius: '50%' }}
+                            />
+                          ) : (
+                            (user.email?.charAt(0).toUpperCase() || 'U')
+                          )}
                         </div>
                         <div className="user-info">
                           <span className="user-email">{user.email}</span>
@@ -3609,7 +3846,12 @@ export default function HomePage() {
                 />
                 {isSearching && <div className="search-spinner" />}
               </div>
-              <button className="button" type="submit" disabled={loading}>
+              <button
+                className="button"
+                type="submit"
+                disabled={loading || refreshing}
+                style={{pointerEvents: refreshing ? 'none' : 'auto', opacity: refreshing ? 0.6 : 1}}
+              >
                 {loading ? '添加中…' : '添加'}
               </button>
             </form>
@@ -4460,6 +4702,7 @@ export default function HomePage() {
           <FeedbackModal
             key={feedbackNonce}
             onClose={() => setFeedbackOpen(false)}
+            user={user}
           />
         )}
       </AnimatePresence>
@@ -4590,8 +4833,14 @@ export default function HomePage() {
       <AnimatePresence>
         {cloudConfigModal.open && (
           <CloudConfigModal
+            type={cloudConfigModal.type}
             onConfirm={handleSyncLocalConfig}
-            onCancel={() => setCloudConfigModal({ open: false, userId: null })}
+            onCancel={() => {
+              if (cloudConfigModal.type === 'conflict' && cloudConfigModal.cloudData) {
+                applyCloudConfig(cloudConfigModal.cloudData);
+              }
+              setCloudConfigModal({ open: false, userId: null });
+            }}
           />
         )}
       </AnimatePresence>
@@ -4666,6 +4915,75 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* 更新提示弹窗 */}
+      <AnimatePresence>
+        {updateModalOpen && (
+          <motion.div
+            className="modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="更新提示"
+            onClick={() => setUpdateModalOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ zIndex: 10002 }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="glass card modal"
+              style={{ maxWidth: '400px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="title" style={{ marginBottom: 12 }}>
+                <UpdateIcon width="20" height="20" style={{color: 'var(--success)'}} />
+                <span>更新提示</span>
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <p className="muted" style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: 12 }}>
+                  检测到新版本，是否刷新浏览器以更新？
+                  <br/>
+                  更新内容如下：
+                </p>
+                {updateContent && (
+                  <div style={{ 
+                    background: 'rgba(0,0,0,0.2)', 
+                    padding: '12px', 
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}>
+                    {updateContent}
+                  </div>
+                )}
+              </div>
+              <div className="row" style={{ gap: 12 }}>
+                <button 
+                  className="button secondary" 
+                  onClick={() => setUpdateModalOpen(false)} 
+                  style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}
+                >
+                  取消
+                </button>
+                <button 
+                  className="button" 
+                  onClick={() => window.location.reload()} 
+                  style={{ flex: 1, background: 'var(--success)', color: '#fff', border: 'none' }}
+                >
+                  刷新浏览器
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 登录模态框 */}
       {loginModalOpen && (
         <div
@@ -4689,6 +5007,18 @@ export default function HomePage() {
 
             <form onSubmit={handleSendOtp}>
               <div className="form-group" style={{ marginBottom: 16 }}>
+                <div style={{
+                  marginBottom: 12,
+                  padding: '8px 12px',
+                  background: 'rgba(230, 162, 60, 0.1)',
+                  border: '1px solid rgba(230, 162, 60, 0.2)',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  color: '#e6a23c',
+                  lineHeight: '1.4'
+                }}>
+                  ⚠️ 登录功能目前正在测试，使用过程中如遇到问题欢迎大家在 <a href="https://github.com/hzm0321/real-time-fund/issues" target="_blank" style={{ textDecoration: 'underline', color: 'inherit' }}>Github</a> 上反馈
+                </div>
                 <div className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
                   请输入邮箱，我们将发送验证码到您的邮箱
                 </div>
@@ -4758,6 +5088,51 @@ export default function HomePage() {
           </div>
         </div>
       )}
+      
+      {/* 全局轻提示 Toast */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            style={{
+              position: 'fixed',
+              top: 24,
+              left: '50%',
+              zIndex: 9999,
+              padding: '10px 20px',
+              background: toast.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 
+                          toast.type === 'success' ? 'rgba(34, 197, 94, 0.9)' : 
+                          'rgba(30, 41, 59, 0.9)',
+              color: '#fff',
+              borderRadius: '8px',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              fontSize: '14px',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              maxWidth: '90vw',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {toast.type === 'error' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            )}
+            {toast.type === 'success' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1166,8 +1166,8 @@ input[type="number"] {
 }
 
 .user-menu-trigger.logged-in {
-  border-color: var(--primary);
-  background: rgba(34, 211, 238, 0.1);
+  /*border-color: var(--primary);*/
+  /*background: rgba(34, 211, 238, 0.1);*/
 }
 
 .user-avatar-small {
