@@ -4,475 +4,28 @@ import { useEffect, useRef, useState, useMemo, useLayoutEffect, useCallback } fr
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { createAvatar } from '@dicebear/core';
 import { glass } from '@dicebear/collection';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import Announcement from "./components/Announcement";
-import zhifubaoImg from "./assets/zhifubao.jpg";
-import weixinImg from "./assets/weixin.jpg";
+import { DatePicker, DonateTabs, NumericInput, Stat } from "./components/Common";
+import { ChevronIcon, CloseIcon, CloudIcon, DragIcon, ExitIcon, GridIcon, ListIcon, LoginIcon, LogoutIcon, MailIcon, PlusIcon, RefreshIcon, SettingsIcon, SortIcon, StarIcon, TrashIcon, UpdateIcon, UserIcon } from "./components/Icons";
 import githubImg from "./assets/github.svg";
-import { supabase } from './lib/supabase';
+import weChatGroupImg from "./assets/weChatGroup.png";
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { fetchFundData, fetchLatestRelease, fetchShanghaiIndexDate, fetchSmartFundNetValue, searchFunds, submitFeedback } from './api/fund';
 import packageJson from '../package.json';
 
-function PlusIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Asia/Shanghai');
 
-function UpdateIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <polyline points="7 10 12 15 17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const TZ = 'Asia/Shanghai';
+const nowInTz = () => dayjs().tz(TZ);
+const toTz = (input) => (input ? dayjs.tz(input, TZ) : nowInTz());
+const formatDate = (input) => toTz(input).format('YYYY-MM-DD');
 
-function TrashIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M8 6l1-2h6l1 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 6l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SettingsIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-      <path d="M19.4 15a7.97 7.97 0 0 0 .1-2l2-1.5-2-3.5-2.3.5a8.02 8.02 0 0 0-1.7-1l-.4-2.3h-4l-.4 2.3a8.02 8.02 0 0 0-1.7 1l-2.3-.5-2 3.5 2 1.5a7.97 7.97 0 0 0 .1 2l-2 1.5 2 3.5 2.3-.5a8.02 8.02 0 0 0 1.7 1l.4 2.3h4l.4-2.3a8.02 8.02 0 0 0 1.7-1l2.3.5 2-3.5-2-1.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CloudIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M20 17.5a4.5 4.5 0 0 0-1.5-8.77A6 6 0 1 0 6 16.5H18a3.5 3.5 0 0 0 2-6.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function RefreshIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M4 12a8 8 0 0 1 12.5-6.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M16 5h3v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M20 12a8 8 0 0 1-12.5 6.9" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 19H5v-3" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function ChevronIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M3 7h18M6 12h12M9 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function UserIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
-      <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LogoutIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <polyline points="16 17 21 12 16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function LoginIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <polyline points="10 17 15 12 10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="15" y1="12" x2="3" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MailIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path d="M22 6l-10 7L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function GridIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
-      <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
-      <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
-      <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function CloseIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ExitIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ListIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function DragIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M4 8h16M4 12h16M4 16h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function FolderPlusIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M9 13h6m-3-3v6m-9-4V5a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StarIcon({ filled, ...props }) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={filled ? "var(--accent)" : "none"}>
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CalendarIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-      <line x1="16" y1="2" x2="16" y2="6"></line>
-      <line x1="8" y1="2" x2="8" y2="6"></line>
-      <line x1="3" y1="10" x2="21" y2="10"></line>
-    </svg>
-  );
-}
-
-function DatePicker({ value, onChange }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(() => value ? new Date(value) : new Date());
-
-  // 点击外部关闭
-  useEffect(() => {
-    const close = () => setIsOpen(false);
-    if (isOpen) window.addEventListener('click', close);
-    return () => window.removeEventListener('click', close);
-  }, [isOpen]);
-
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth(); // 0-11
-
-  const handlePrevMonth = (e) => {
-    e.stopPropagation();
-    setCurrentMonth(new Date(year, month - 1, 1));
-  };
-
-  const handleNextMonth = (e) => {
-    e.stopPropagation();
-    setCurrentMonth(new Date(year, month + 1, 1));
-  };
-
-  const handleSelect = (e, day) => {
-    e.stopPropagation();
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    // 检查是否是未来日期
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(dateStr);
-
-    if (selectedDate > today) return; // 禁止选择未来日期
-
-    onChange(dateStr);
-    setIsOpen(false);
-  };
-
-  // 生成日历数据
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0(Sun)-6(Sat)
-
-  const days = [];
-  for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
-  for (let i = 1; i <= daysInMonth; i++) days.push(i);
-
-  return (
-    <div className="date-picker" style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-      <div
-        className="input-trigger"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 12px',
-          height: '40px',
-          background: 'rgba(0,0,0,0.2)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          border: '1px solid transparent',
-          transition: 'all 0.2s'
-        }}
-      >
-        <span>{value || '选择日期'}</span>
-        <CalendarIcon width="16" height="16" className="muted" />
-      </div>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="glass card"
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              width: '100%',
-              marginTop: 8,
-              padding: 12,
-              zIndex: 10,
-              background: 'rgba(30, 41, 59, 0.95)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,255,255,0.1)'
-            }}
-          >
-            <div className="calendar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <button onClick={handlePrevMonth} className="icon-button" style={{ width: 24, height: 24 }}>&lt;</button>
-              <span style={{ fontWeight: 600 }}>{year}年 {month + 1}月</span>
-              <button
-                onClick={handleNextMonth}
-                className="icon-button"
-                style={{ width: 24, height: 24 }}
-              // 如果下个月已经是未来，可以禁用（可选，这里简单起见不禁用翻页，只禁用日期点击）
-              >
-                &gt;
-              </button>
-            </div>
-
-            <div className="calendar-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center' }}>
-              {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-                <div key={d} className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>{d}</div>
-              ))}
-              {days.map((d, i) => {
-                if (!d) return <div key={i} />;
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const isSelected = value === dateStr;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const current = new Date(dateStr);
-                const isToday = current.getTime() === today.getTime();
-                const isFuture = current > today;
-
-                return (
-                  <div
-                    key={i}
-                    onClick={(e) => !isFuture && handleSelect(e, d)}
-                    style={{
-                      height: 28,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '13px',
-                      borderRadius: '6px',
-                      cursor: isFuture ? 'not-allowed' : 'pointer',
-                      background: isSelected ? 'var(--primary)' : isToday ? 'rgba(255,255,255,0.1)' : 'transparent',
-                      color: isFuture ? 'var(--muted)' : isSelected ? '#000' : 'var(--text)',
-                      fontWeight: isSelected || isToday ? 600 : 400,
-                      opacity: isFuture ? 0.3 : 1
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected && !isFuture) e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected && !isFuture) e.currentTarget.style.background = isToday ? 'rgba(255,255,255,0.1)' : 'transparent';
-                    }}
-                  >
-                    {d}
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function DonateTabs() {
-  const [method, setMethod] = useState('wechat'); // alipay, wechat
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-      <div className="tabs glass" style={{ padding: 4, borderRadius: 12, width: '100%', display: 'flex' }}>
-        <button
-          onClick={() => setMethod('alipay')}
-          style={{
-            flex: 1,
-            padding: '8px 0',
-            border: 'none',
-            background: method === 'alipay' ? 'rgba(34, 211, 238, 0.15)' : 'transparent',
-            color: method === 'alipay' ? 'var(--primary)' : 'var(--muted)',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 600,
-            transition: 'all 0.2s ease'
-          }}
-        >
-          支付宝
-        </button>
-        <button
-          onClick={() => setMethod('wechat')}
-          style={{
-            flex: 1,
-            padding: '8px 0',
-            border: 'none',
-            background: method === 'wechat' ? 'rgba(34, 211, 238, 0.15)' : 'transparent',
-            color: method === 'wechat' ? 'var(--primary)' : 'var(--muted)',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 600,
-            transition: 'all 0.2s ease'
-          }}
-        >
-          微信支付
-        </button>
-      </div>
-
-      <div
-        style={{
-          width: 200,
-          height: 200,
-          background: 'white',
-          borderRadius: 12,
-          padding: 8,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        {method === 'alipay' ? (
-          <img
-            src={zhifubaoImg.src}
-            alt="支付宝收款码"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        ) : (
-          <img
-            src={weixinImg.src}
-            alt="微信收款码"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MinusIcon(props) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function NumericInput({ value, onChange, step = 1, min = 0, placeholder }) {
-  const decimals = String(step).includes('.') ? String(step).split('.')[1].length : 0;
-  const fmt = (n) => Number(n).toFixed(decimals);
-  const inc = () => {
-    const v = parseFloat(value);
-    const base = isNaN(v) ? 0 : v;
-    const next = base + step;
-    onChange(fmt(next));
-  };
-  const dec = () => {
-    const v = parseFloat(value);
-    const base = isNaN(v) ? 0 : v;
-    const next = Math.max(min, base - step);
-    onChange(fmt(next));
-  };
-  return (
-    <div style={{ position: 'relative' }}>
-      <input
-        type="number"
-        step="any"
-        className="input no-zoom" // 增加 no-zoom 类
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ width: '100%', paddingRight: 56 }}
-      />
-      <div style={{ position: 'absolute', right: 6, top: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button className="icon-button" type="button" onClick={inc} style={{ width: 44, height: 16, padding: 0 }}>
-          <PlusIcon width="14" height="14" />
-        </button>
-        <button className="icon-button" type="button" onClick={dec} style={{ width: 44, height: 16, padding: 0 }}>
-          <MinusIcon width="14" height="14" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, delta }) {
-  const dir = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
-  return (
-    <div className="stat" style={{ flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      <span className="label" style={{ fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-      <span className={`value ${dir}`} style={{ fontSize: '15px', lineHeight: 1.2, whiteSpace: 'nowrap' }}>{value}</span>
-    </div>
-  );
-}
-
-function FeedbackModal({ onClose, user }) {
+function FeedbackModal({ onClose, user, onOpenWeChat }) {
   const [submitting, setSubmitting] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
   const [error, setError] = useState("");
@@ -489,16 +42,11 @@ function FeedbackModal({ onClose, user }) {
     }
 
     // Web3Forms Access Key
-    formData.append("access_key", "c390fbb1-77e0-4aab-a939-caa75edc7319");
+    formData.append("access_key", process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || '');
     formData.append("subject", "基估宝 - 用户反馈");
 
     try {
-      const response = await fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
+      const data = await submitFeedback(formData);
       if (data.success) {
         setSucceeded(true);
       } else {
@@ -601,9 +149,59 @@ function FeedbackModal({ onClose, user }) {
                 </a>
                 区留言互动
               </p>
+              <p className="muted" style={{ fontSize: '12px', lineHeight: '1.6' }}>
+                或加入我们的
+                <a
+                  className="link-button"
+                  style={{ color: 'var(--primary)', textDecoration: 'underline', padding: '0 4px', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={onOpenWeChat}
+                >
+                  微信用户交流群
+                </a>
+              </p>
             </div>
           </form>
         )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function WeChatModal({ onClose }) {
+  return (
+    <motion.div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="微信用户交流群"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ zIndex: 10002 }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="glass card modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '360px', padding: '24px' }}
+      >
+        <div className="title" style={{ marginBottom: 20, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span>💬 微信用户交流群</span>
+            </div>
+            <button className="icon-button" onClick={onClose} style={{ border: 'none', background: 'transparent' }}>
+                <CloseIcon width="20" height="20" />
+            </button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <img src={weChatGroupImg.src} alt="WeChat Group" style={{ maxWidth: '100%', borderRadius: '8px' }} />
+        </div>
+        <p className="muted" style={{ textAlign: 'center', marginTop: 16, fontSize: '14px' }}>
+            扫码加入群聊，获取最新更新与交流
+        </p>
       </motion.div>
     </motion.div>
   );
@@ -645,10 +243,10 @@ function HoldingActionModal({ fund, onClose, onAction }) {
         </div>
 
         <div className="grid" style={{ gap: 12 }}>
-          <button hidden className="button col-6" onClick={() => onAction('buy')} style={{ background: 'rgba(34, 211, 238, 0.1)', border: '1px solid var(--primary)', color: 'var(--primary)' }}>
+          <button className="button col-6" onClick={() => onAction('buy')} style={{ background: 'rgba(34, 211, 238, 0.1)', border: '1px solid var(--primary)', color: 'var(--primary)' }}>
             加仓
           </button>
-          <button hidden className="button col-6" onClick={() => onAction('sell')} style={{ background: 'rgba(248, 113, 113, 0.1)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
+          <button className="button col-6" onClick={() => onAction('sell')} style={{ background: 'rgba(248, 113, 113, 0.1)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
             减仓
           </button>
           <button className="button col-12" onClick={() => onAction('edit')} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}>
@@ -673,25 +271,98 @@ function HoldingActionModal({ fund, onClose, onAction }) {
   );
 }
 
-function TradeModal({ type, fund, onClose, onConfirm }) {
+function TradeModal({ type, fund, holding, onClose, onConfirm, pendingTrades = [], onDeletePending }) {
   const isBuy = type === 'buy';
   const [share, setShare] = useState('');
   const [amount, setAmount] = useState('');
   const [feeRate, setFeeRate] = useState('0');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [isAfter3pm, setIsAfter3pm] = useState(new Date().getHours() >= 15);
+  const [date, setDate] = useState(() => {
+    return formatDate();
+  });
+  const [isAfter3pm, setIsAfter3pm] = useState(nowInTz().hour() >= 15);
   const [calcShare, setCalcShare] = useState(null);
-  const price = fund?.estPricedCoverage > 0.05 ? fund?.estGsz : (typeof fund?.gsz === 'number' ? fund?.gsz : Number(fund?.dwjz));
+  
+  const currentPendingTrades = useMemo(() => {
+    return pendingTrades.filter(t => t.fundCode === fund?.code);
+  }, [pendingTrades, fund]);
+
+  const pendingSellShare = useMemo(() => {
+      return currentPendingTrades
+          .filter(t => t.type === 'sell')
+          .reduce((acc, curr) => acc + (Number(curr.share) || 0), 0);
+  }, [currentPendingTrades]);
+
+  const availableShare = holding ? Math.max(0, holding.share - pendingSellShare) : 0;
+
+  const [showPendingList, setShowPendingList] = useState(false);
+
+  // Auto-close pending list if empty
+  useEffect(() => {
+      if (showPendingList && currentPendingTrades.length === 0) {
+          setShowPendingList(false);
+      }
+  }, [showPendingList, currentPendingTrades]);
+  
+  const getEstimatePrice = () => fund?.estPricedCoverage > 0.05 ? fund?.estGsz : (typeof fund?.gsz === 'number' ? fund?.gsz : Number(fund?.dwjz));
+  const [price, setPrice] = useState(getEstimatePrice());
+  const [loadingPrice, setLoadingPrice] = useState(false);
+  const [actualDate, setActualDate] = useState(null);
+
+  useEffect(() => {
+    if (date && fund?.code) {
+        setLoadingPrice(true);
+        setActualDate(null);
+        
+        let queryDate = date;
+        if (isAfter3pm) {
+            queryDate = toTz(date).add(1, 'day').format('YYYY-MM-DD');
+        }
+
+        fetchSmartFundNetValue(fund.code, queryDate).then(result => {
+            if (result) {
+                setPrice(result.value);
+                setActualDate(result.date);
+            } else {
+                setPrice(0);
+                setActualDate(null);
+            }
+        }).finally(() => setLoadingPrice(false));
+    }
+  }, [date, isAfter3pm, isBuy, fund]);
+
+  const [feeMode, setFeeMode] = useState('rate'); // 'rate' | 'amount'
+  const [feeValue, setFeeValue] = useState('0'); // Stores either rate or amount depending on mode
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Sell logic calculations
+  const sellShare = parseFloat(share) || 0;
+  const sellPrice = parseFloat(price) || 0;
+  const sellAmount = sellShare * sellPrice;
+
+  // Calculate fee and return based on mode
+  let sellFee = 0;
+  if (feeMode === 'rate') {
+    const rate = parseFloat(feeValue) || 0;
+    sellFee = sellAmount * (rate / 100);
+  } else {
+    sellFee = parseFloat(feeValue) || 0;
+  }
+  
+  const estimatedReturn = sellAmount - sellFee;
 
   useEffect(() => {
     if (!isBuy) return;
     const a = parseFloat(amount);
     const f = parseFloat(feeRate);
     const p = parseFloat(price);
-    if (a > 0 && p > 0 && !isNaN(f)) {
-      const netAmount = a / (1 + f / 100);
-      const s = netAmount / p;
-      setCalcShare(s);
+    if (a > 0 && !isNaN(f)) {
+        if (p > 0) {
+            const netAmount = a / (1 + f / 100);
+            const s = netAmount / p;
+            setCalcShare(s.toFixed(2));
+        } else {
+            setCalcShare('待确认');
+        }
     } else {
       setCalcShare(null);
     }
@@ -700,17 +371,33 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isBuy) {
-      if (!amount || !feeRate || !date || calcShare === null || !price) return;
-      onConfirm({ share: calcShare, price: Number(price), totalCost: Number(amount), date, isAfter3pm });
+      if (!amount || !feeRate || !date || calcShare === null) return;
+      setShowConfirm(true);
     } else {
-      if (!share || !price) return;
-      onConfirm({ share: Number(share), price: Number(price) });
+      if (!share || !date) return;
+      setShowConfirm(true);
     }
+  };
+
+  const handleFinalConfirm = () => {
+      if (isBuy) {
+        onConfirm({ share: calcShare === '待确认' ? null : Number(calcShare), price: Number(price), totalCost: Number(amount), date, isAfter3pm, feeRate: Number(feeRate) });
+        return;
+      }
+      onConfirm({ share: Number(share), price: Number(price), date: actualDate || date, isAfter3pm, feeMode, feeValue });
   };
 
   const isValid = isBuy
     ? (!!amount && !!feeRate && !!date && calcShare !== null)
-    : (!!share && !!price);
+    : (!!share && !!date);
+    
+  const handleSetShareFraction = (fraction) => {
+      if(availableShare > 0) {
+          setShare((availableShare * fraction).toFixed(2));
+      }
+  };
+
+  const [revokeTrade, setRevokeTrade] = useState(null);
 
   return (
     <motion.div
@@ -734,18 +421,258 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
         <div className="title" style={{ marginBottom: 20, justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: '20px' }}>{isBuy ? '📥' : '📤'}</span>
-            <span>{isBuy ? '加仓' : '减仓'}</span>
+            <span>{showPendingList ? '待交易队列' : (showConfirm ? (isBuy ? '买入确认' : '卖出确认') : (isBuy ? '加仓' : '减仓'))}</span>
           </div>
           <button className="icon-button" onClick={onClose} style={{ border: 'none', background: 'transparent' }}>
             <CloseIcon width="20" height="20" />
           </button>
         </div>
 
+        {!showPendingList && !showConfirm && currentPendingTrades.length > 0 && (
+            <div 
+                style={{ 
+                    marginBottom: 16, 
+                    background: 'rgba(230, 162, 60, 0.1)', 
+                    border: '1px solid rgba(230, 162, 60, 0.2)', 
+                    borderRadius: 8, 
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    color: '#e6a23c',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer'
+                }}
+                onClick={() => setShowPendingList(true)}
+            >
+                <span>⚠️ 当前有 {currentPendingTrades.length} 笔待处理交易</span>
+                <span style={{ textDecoration: 'underline' }}>查看详情 &gt;</span>
+            </div>
+        )}
+
+        {showPendingList ? (
+            <div className="pending-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <div className="pending-list-header" style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15,23,42,0.95)', backdropFilter: 'blur(6px)', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                    <button 
+                        className="button secondary" 
+                        onClick={() => setShowPendingList(false)}
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                    >
+                        &lt; 返回
+                    </button>
+                </div>
+                <div className="pending-list-items" style={{ paddingTop: 0 }}>
+                    {currentPendingTrades.map((trade, idx) => (
+                        <div key={trade.id || idx} style={{ background: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 8, marginBottom: 8 }}>
+                            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ fontWeight: 600, fontSize: '14px', color: trade.type === 'buy' ? 'var(--danger)' : 'var(--success)' }}>
+                                    {trade.type === 'buy' ? '买入' : '卖出'}
+                                </span>
+                                <span className="muted" style={{ fontSize: '12px' }}>{trade.date} {trade.isAfter3pm ? '(15:00后)' : ''}</span>
+                            </div>
+                            <div className="row" style={{ justifyContent: 'space-between', fontSize: '12px' }}>
+                                <span className="muted">份额/金额</span>
+                                <span>{trade.share ? `${trade.share} 份` : `¥${trade.amount}`}</span>
+                            </div>
+                            <div className="row" style={{ justifyContent: 'space-between', fontSize: '12px', marginTop: 4 }}>
+                                <span className="muted">状态</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ color: '#e6a23c' }}>等待净值更新...</span>
+                                    <button
+                                        className="button secondary"
+                                        onClick={() => setRevokeTrade(trade)}
+                                        style={{ 
+                                            padding: '2px 8px', 
+                                            fontSize: '10px', 
+                                            height: 'auto',
+                                            background: 'rgba(255,255,255,0.1)',
+                                            color: 'var(--text)'
+                                        }}
+                                    >
+                                        撤销
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        ) : (
+            <>
+        {!showConfirm && (
         <div style={{ marginBottom: 16 }}>
           <div className="fund-name" style={{ fontWeight: 600, fontSize: '16px', marginBottom: 4 }}>{fund?.name}</div>
           <div className="muted" style={{ fontSize: '12px' }}>#{fund?.code}</div>
         </div>
+        )}
 
+        {showConfirm ? (
+            isBuy ? (
+            <div style={{ fontSize: '14px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">基金名称</span>
+                        <span style={{ fontWeight: 600 }}>{fund?.name}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">买入金额</span>
+                        <span>¥{Number(amount).toFixed(2)}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">买入费率</span>
+                        <span>{Number(feeRate).toFixed(2)}%</span>
+                    </div>
+                     <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">参考净值</span>
+                        <span>{loadingPrice ? '查询中...' : (price ? `¥${Number(price).toFixed(4)}` : '待查询 (加入队列)')}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">预估份额</span>
+                        <span>{calcShare === '待确认' ? '待确认' : `${Number(calcShare).toFixed(2)} 份`}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">买入日期</span>
+                        <span>{date}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
+                        <span className="muted">交易时段</span>
+                        <span>{isAfter3pm ? '15:00后' : '15:00前'}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: '12px', textAlign: 'right', marginTop: 4 }}>
+                        {loadingPrice ? '正在获取该日净值...' : `*基于${price === getEstimatePrice() ? '当前净值/估值' : '当日净值'}测算`}
+                    </div>
+                </div>
+
+                {holding && calcShare !== '待确认' && (
+                    <div style={{ marginBottom: 20 }}>
+                        <div className="muted" style={{ marginBottom: 8, fontSize: '12px' }}>持仓变化预览</div>
+                        <div className="row" style={{ gap: 12 }}>
+                            <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
+                                <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>持有份额</div>
+                                <div style={{ fontSize: '12px' }}>
+                                    <span style={{ opacity: 0.7 }}>{holding.share.toFixed(2)}</span>
+                                    <span style={{ margin: '0 4px' }}>→</span>
+                                    <span style={{ fontWeight: 600 }}>{(holding.share + Number(calcShare)).toFixed(2)}</span>
+                                </div>
+                            </div>
+                            {price ? (
+                                <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
+                                    <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>持有市值 (估)</div>
+                                    <div style={{ fontSize: '12px' }}>
+                                        <span style={{ opacity: 0.7 }}>¥{(holding.share * Number(price)).toFixed(2)}</span>
+                                        <span style={{ margin: '0 4px' }}>→</span>
+                                        <span style={{ fontWeight: 600 }}>¥{((holding.share + Number(calcShare)) * Number(price)).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                )}
+
+                <div className="row" style={{ gap: 12 }}>
+                    <button 
+                        type="button" 
+                        className="button secondary" 
+                        onClick={() => setShowConfirm(false)} 
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}
+                    >
+                        返回修改
+                    </button>
+                    <button
+                        type="button"
+                        className="button"
+                        onClick={handleFinalConfirm}
+                        disabled={loadingPrice}
+                        style={{ flex: 1, background: 'var(--primary)', opacity: loadingPrice ? 0.6 : 1, color: '#05263b' }}
+                    >
+                        {loadingPrice ? '请稍候' : (price ? '确认买入' : '加入待处理队列')}
+                    </button>
+                </div>
+            </div>
+            ) : (
+            <div style={{ fontSize: '14px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">基金名称</span>
+                        <span style={{ fontWeight: 600 }}>{fund?.name}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">卖出份额</span>
+                        <span>{sellShare.toFixed(2)} 份</span>
+                    </div>
+                     <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">预估卖出单价</span>
+                        <span>{loadingPrice ? '查询中...' : (price ? `¥${sellPrice.toFixed(4)}` : '待查询 (加入队列)')}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">卖出费率/费用</span>
+                        <span>{feeMode === 'rate' ? `${feeValue}%` : `¥${feeValue}`}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">预估手续费</span>
+                        <span>{price ? `¥${sellFee.toFixed(2)}` : '待计算'}</span>
+                    </div>
+                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span className="muted">卖出日期</span>
+                        <span>{date}</span>
+                    </div>
+                     <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
+                        <span className="muted">预计回款</span>
+                        <span style={{ color: 'var(--danger)', fontWeight: 700 }}>{loadingPrice ? '计算中...' : (price ? `¥${estimatedReturn.toFixed(2)}` : '待计算')}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: '12px', textAlign: 'right', marginTop: 4 }}>
+                        {loadingPrice ? '正在获取该日净值...' : `*基于${price === getEstimatePrice() ? '当前净值/估值' : '当日净值'}测算`}
+                    </div>
+                </div>
+
+                {holding && (
+                    <div style={{ marginBottom: 20 }}>
+                        <div className="muted" style={{ marginBottom: 8, fontSize: '12px' }}>持仓变化预览</div>
+                        <div className="row" style={{ gap: 12 }}>
+                            <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
+                                <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>持有份额</div>
+                                <div style={{ fontSize: '12px' }}>
+                                    <span style={{ opacity: 0.7 }}>{holding.share.toFixed(2)}</span>
+                                    <span style={{ margin: '0 4px' }}>→</span>
+                                    <span style={{ fontWeight: 600 }}>{(holding.share - sellShare).toFixed(2)}</span>
+                                </div>
+                            </div>
+                            {price ? (
+                                <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
+                                    <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>持有市值 (估)</div>
+                                    <div style={{ fontSize: '12px' }}>
+                                        <span style={{ opacity: 0.7 }}>¥{(holding.share * sellPrice).toFixed(2)}</span>
+                                        <span style={{ margin: '0 4px' }}>→</span>
+                                        <span style={{ fontWeight: 600 }}>¥{((holding.share - sellShare) * sellPrice).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                )}
+
+                <div className="row" style={{ gap: 12 }}>
+                    <button 
+                        type="button" 
+                        className="button secondary" 
+                        onClick={() => setShowConfirm(false)} 
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}
+                    >
+                        返回修改
+                    </button>
+                    <button
+                        type="button"
+                        className="button"
+                        onClick={handleFinalConfirm}
+                        disabled={loadingPrice}
+                        style={{ flex: 1, background: 'var(--danger)', opacity: loadingPrice ? 0.6 : 1 }}
+                    >
+                        {loadingPrice ? '请稍候' : (price ? '确认卖出' : '加入待处理队列')}
+                    </button>
+                </div>
+            </div>
+            )
+        ) : (
         <form onSubmit={handleSubmit}>
           {isBuy ? (
             <>
@@ -825,20 +752,17 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
                     15:00后
                   </button>
                 </div>
-                <div className="muted" style={{ fontSize: '12px', marginTop: 6 }}>
-                  {isAfter3pm ? '将在下一个交易日确认份额' : '将在当日确认份额'}
-                </div>
               </div>
 
-              {price && calcShare !== null && (
-                <div className="glass" style={{ padding: '12px', borderRadius: '8px', background: 'rgba(34, 211, 238, 0.05)', border: '1px solid rgba(34, 211, 238, 0.2)', marginBottom: 8 }}>
-                  <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span className="muted" style={{ fontSize: '12px' }}>预计确认份额</span>
-                    <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{calcShare.toFixed(2)} 份</span>
-                  </div>
-                  <div className="muted" style={{ fontSize: '12px' }}>计算基于当前净值/估值：¥{Number(price).toFixed(4)}</div>
-                </div>
-              )}
+              <div style={{ marginBottom: 12, fontSize: '12px' }}>
+                {loadingPrice ? (
+                    <span className="muted">正在查询净值数据...</span>
+                ) : price === 0 ? null : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className="muted">参考净值: {Number(price).toFixed(4)}</span>
+                    </div>
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -852,9 +776,134 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
                     onChange={setShare}
                     step={1}
                     min={0}
-                    placeholder="请输入卖出份额"
+                    placeholder={holding ? `最多可卖 ${availableShare.toFixed(2)} 份` : "请输入卖出份额"}
                   />
                 </div>
+                {holding && holding.share > 0 && (
+                   <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                       {[
+                           { label: '1/4', value: 0.25 },
+                           { label: '1/3', value: 1/3 },
+                           { label: '1/2', value: 0.5 },
+                           { label: '全部', value: 1 }
+                       ].map((opt) => (
+                           <button
+                               key={opt.label}
+                               type="button"
+                               onClick={() => handleSetShareFraction(opt.value)}
+                               style={{
+                                   flex: 1,
+                                   padding: '4px 8px',
+                                   fontSize: '12px',
+                                   background: 'rgba(255,255,255,0.1)',
+                                   border: 'none',
+                                   borderRadius: '4px',
+                                   color: 'var(--text)',
+                                   cursor: 'pointer'
+                               }}
+                           >
+                               {opt.label}
+                           </button>
+                       ))}
+                   </div>
+                )}
+                 {holding && (
+                    <div className="muted" style={{ fontSize: '12px', marginTop: 6 }}>
+                        当前持仓: {holding.share.toFixed(2)} 份 {pendingSellShare > 0 && <span style={{color: '#e6a23c', marginLeft: 8}}>冻结: {pendingSellShare.toFixed(2)} 份</span>}
+                    </div>
+                )}
+              </div>
+
+              <div className="row" style={{ gap: 12, marginBottom: 16 }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label className="muted" style={{ fontSize: '14px' }}>
+                      {feeMode === 'rate' ? '卖出费率 (%)' : '卖出费用 (¥)'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                          setFeeMode(m => m === 'rate' ? 'amount' : 'rate');
+                          setFeeValue('0');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                    >
+                      切换为{feeMode === 'rate' ? '金额' : '费率'}
+                    </button>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 12 }}>
+                    <NumericInput
+                      value={feeValue}
+                      onChange={setFeeValue}
+                      step={feeMode === 'rate' ? 0.01 : 1}
+                      min={0}
+                      placeholder={feeMode === 'rate' ? "0.00" : "0.00"}
+                    />
+                  </div>
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                    卖出日期 <span style={{ color: 'var(--danger)' }}>*</span>
+                  </label>
+                  <DatePicker value={date} onChange={setDate} />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                  交易时段
+                </label>
+                <div className="row" style={{ gap: 8, background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsAfter3pm(false)}
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      background: !isAfter3pm ? 'var(--primary)' : 'transparent',
+                      color: !isAfter3pm ? '#05263b' : 'var(--muted)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: '6px 8px'
+                    }}
+                  >
+                    15:00前
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAfter3pm(true)}
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      background: isAfter3pm ? 'var(--primary)' : 'transparent',
+                      color: isAfter3pm ? '#05263b' : 'var(--muted)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: '6px 8px'
+                    }}
+                  >
+                    15:00后
+                  </button>
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: 12, fontSize: '12px' }}>
+                {loadingPrice ? (
+                    <span className="muted">正在查询净值数据...</span>
+                ) : price === 0 ? null : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className="muted">参考净值: {price.toFixed(4)}</span>
+                    </div>
+                )}
               </div>
             </>
           )}
@@ -864,14 +913,32 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
             <button
               type="submit"
               className="button"
-              disabled={!isValid}
-              style={{ flex: 1, opacity: isValid ? 1 : 0.6 }}
+              disabled={!isValid || loadingPrice}
+              style={{ flex: 1, opacity: (!isValid || loadingPrice) ? 0.6 : 1 }}
             >
               确定
             </button>
           </div>
         </form>
+      )}
+              </>
+            )}
       </motion.div>
+      <AnimatePresence>
+        {revokeTrade && (
+          <ConfirmModal
+            key="revoke-confirm"
+            title="撤销交易"
+            message={`确定要撤销这笔 ${revokeTrade.share ? `${revokeTrade.share}份` : `¥${revokeTrade.amount}`} 的${revokeTrade.type === 'buy' ? '买入' : '卖出'}申请吗？`}
+            onConfirm={() => {
+                onDeletePending?.(revokeTrade.id);
+                setRevokeTrade(null);
+            }}
+            onCancel={() => setRevokeTrade(null)}
+            confirmText="确认撤销"
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -944,13 +1011,14 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
 
     if (mode === 'share') {
       if (!share || !cost) return;
-      finalShare = Number(share);
+      finalShare = Number(Number(share).toFixed(2));
       finalCost = Number(cost);
     } else {
       if (!amount || !dwjz) return;
       const a = Number(amount);
       const p = Number(profit || 0);
-      finalShare = a / dwjz;
+      const rawShare = a / dwjz;
+      finalShare = Number(rawShare.toFixed(2));
       const principal = a - p;
       finalCost = finalShare > 0 ? principal / finalShare : 0;
     }
@@ -1254,7 +1322,10 @@ function ConfirmModal({ title, message, onConfirm, onCancel, confirmText = "确�
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      onClick={onCancel}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCancel();
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -1318,7 +1389,7 @@ function GroupManageModal({ groups, onClose, onSave }) {
 
   const handleAddRow = () => {
     const newGroup = {
-      id: `group_${Date.now()}`,
+      id: `group_${nowInTz().valueOf()}`,
       name: '',
       codes: []
     };
@@ -1818,6 +1889,7 @@ export default function HomePage() {
   // 反馈弹窗状态
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackNonce, setFeedbackNonce] = useState(0);
+  const [weChatOpen, setWeChatOpen] = useState(false);
 
   // 搜索相关状态
   const [searchTerm, setSearchTerm] = useState('');
@@ -1835,13 +1907,22 @@ export default function HomePage() {
   const [clearConfirm, setClearConfirm] = useState(null); // { fund }
   const [donateOpen, setDonateOpen] = useState(false);
   const [holdings, setHoldings] = useState({}); // { [code]: { share: number, cost: number } }
+  const [pendingTrades, setPendingTrades] = useState([]); // [{ id, fundCode, share, date, ... }]
   const [percentModes, setPercentModes] = useState({}); // { [code]: boolean }
+  
+  const holdingsRef = useRef(holdings);
+  const pendingTradesRef = useRef(pendingTrades);
+
+  useEffect(() => {
+    holdingsRef.current = holdings;
+    pendingTradesRef.current = pendingTrades;
+  }, [holdings, pendingTrades]);
+
   const [isTradingDay, setIsTradingDay] = useState(true); // 默认为交易日，通过接口校正
   const tabsRef = useRef(null);
   const [fundDeleteConfirm, setFundDeleteConfirm] = useState(null); // { code, name }
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayStr = formatDate();
 
   const [isMobile, setIsMobile] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -1863,16 +1944,13 @@ export default function HomePage() {
   useEffect(() => {
     const checkUpdate = async () => {
       try {
-        const res = await fetch('https://api.github.com/repos/hzm0321/real-time-fund/releases/latest');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.tag_name) {
-          const remoteVersion = data.tag_name.replace(/^v/, '');
-          if (remoteVersion !== packageJson.version) {
-            setHasUpdate(true);
-            setLatestVersion(remoteVersion);
-            setUpdateContent(data.body || '');
-          }
+        const data = await fetchLatestRelease();
+        if (!data?.tagName) return;
+        const remoteVersion = data.tagName.replace(/^v/, '');
+        if (remoteVersion !== packageJson.version) {
+          setHasUpdate(true);
+          setLatestVersion(remoteVersion);
+          setUpdateContent(data.body || '');
         }
       } catch (e) {
         console.error('Check update failed:', e);
@@ -1913,9 +1991,9 @@ export default function HomePage() {
   }, [swipedFundCode]);
 
   // 检查交易日状态
-  const checkTradingDay = () => {
-    const now = new Date();
-    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+  const checkTradingDay = async () => {
+    const now = nowInTz();
+    const isWeekend = now.day() === 0 || now.day() === 6;
 
     // 周末直接判定为非交易日
     if (isWeekend) {
@@ -1926,39 +2004,26 @@ export default function HomePage() {
     // 工作日通过上证指数判断是否为节假日
     // 接口返回示例: v_sh000001="1~上证指数~...~20260205150000~..."
     // 第30位是时间字段
-    const script = document.createElement('script');
-    script.src = `https://qt.gtimg.cn/q=sh000001&_t=${Date.now()}`;
-    script.onload = () => {
-      const data = window.v_sh000001;
-      if (data) {
-        const parts = data.split('~');
-        if (parts.length > 30) {
-          const dateStr = parts[30].slice(0, 8); // 20260205
-          const currentStr = todayStr.replace(/-/g, '');
-
-          if (dateStr === currentStr) {
-            setIsTradingDay(true); // 日期匹配，确认为交易日
-          } else {
-            // 日期不匹配 (显示的是旧数据)
-            // 如果已经过了 09:30 还是旧数据，说明今天休市
-            const minutes = now.getHours() * 60 + now.getMinutes();
-            if (minutes >= 9 * 60 + 30) {
-              setIsTradingDay(false);
-            } else {
-              // 9:30 之前，即使是旧数据，也默认是交易日（盘前）
-              setIsTradingDay(true);
-            }
-          }
+    try {
+      const dateStr = await fetchShanghaiIndexDate();
+      if (!dateStr) {
+        setIsTradingDay(!isWeekend);
+        return;
+      }
+      const currentStr = todayStr.replace(/-/g, '');
+      if (dateStr === currentStr) {
+        setIsTradingDay(true);
+      } else {
+        const minutes = now.hour() * 60 + now.minute();
+        if (minutes >= 9 * 60 + 30) {
+          setIsTradingDay(false);
+        } else {
+          setIsTradingDay(true);
         }
       }
-      document.body.removeChild(script);
-    };
-    script.onerror = () => {
-      document.body.removeChild(script);
-      // 接口失败，降级为仅判断周末
+    } catch (e) {
       setIsTradingDay(!isWeekend);
-    };
-    document.body.appendChild(script);
+    }
   };
 
   useEffect(() => {
@@ -1972,8 +2037,8 @@ export default function HomePage() {
   const getHoldingProfit = (fund, holding) => {
     if (!holding || typeof holding.share !== 'number') return null;
 
-    const now = new Date();
-    const isAfter9 = now.getHours() >= 9;
+    const now = nowInTz();
+    const isAfter9 = now.hour() >= 9;
     const hasTodayData = fund.jzrq === todayStr;
     const hasTodayValuation = typeof fund.gztime === 'string' && fund.gztime.startsWith(todayStr);
     const canCalcTodayProfit = hasTodayData || hasTodayValuation;
@@ -2110,7 +2175,87 @@ export default function HomePage() {
     setClearConfirm(null);
   };
 
+  const processPendingQueue = async () => {
+    const currentPending = pendingTradesRef.current;
+    if (currentPending.length === 0) return;
+
+    let stateChanged = false;
+    let tempHoldings = { ...holdingsRef.current };
+    const processedIds = new Set();
+
+    for (const trade of currentPending) {
+      let queryDate = trade.date;
+      if (trade.isAfter3pm) {
+          queryDate = toTz(trade.date).add(1, 'day').format('YYYY-MM-DD');
+      }
+
+      // 尝试获取智能净值
+      const result = await fetchSmartFundNetValue(trade.fundCode, queryDate);
+      
+      if (result && result.value > 0) {
+        // 成功获取，执行交易
+        const current = tempHoldings[trade.fundCode] || { share: 0, cost: 0 };
+        
+        let newShare, newCost;
+        if (trade.type === 'buy') {
+             const feeRate = trade.feeRate || 0;
+             const netAmount = trade.amount / (1 + feeRate / 100);
+             const share = netAmount / result.value;
+             newShare = current.share + share;
+             newCost = (current.cost * current.share + trade.amount) / newShare;
+        } else {
+             newShare = Math.max(0, current.share - trade.share);
+             newCost = current.cost;
+             if (newShare === 0) newCost = 0;
+        }
+        
+        tempHoldings[trade.fundCode] = { share: newShare, cost: newCost };
+        stateChanged = true;
+        processedIds.add(trade.id);
+      }
+    }
+
+    if (stateChanged) {
+      setHoldings(tempHoldings);
+      storageHelper.setItem('holdings', JSON.stringify(tempHoldings));
+      
+      setPendingTrades(prev => {
+          const next = prev.filter(t => !processedIds.has(t.id));
+          storageHelper.setItem('pendingTrades', JSON.stringify(next));
+          return next;
+      });
+      
+      showToast(`已处理 ${processedIds.size} 笔待定交易`, 'success');
+    }
+  };
+
   const handleTrade = (fund, data) => {
+    // 如果没有价格（API失败），加入待处理队列
+    if (!data.price || data.price === 0) {
+        const pending = {
+            id: crypto.randomUUID(),
+            fundCode: fund.code,
+            fundName: fund.name,
+            type: tradeModal.type,
+            share: data.share,
+            amount: data.totalCost,
+            feeRate: tradeModal.type === 'buy' ? data.feeRate : 0, // Buy needs feeRate
+            feeMode: data.feeMode,
+            feeValue: data.feeValue,
+            date: data.date,
+            isAfter3pm: data.isAfter3pm,
+            timestamp: Date.now()
+        };
+        
+        const next = [...pendingTrades, pending];
+        setPendingTrades(next);
+        storageHelper.setItem('pendingTrades', JSON.stringify(next));
+        
+        setTradeModal({ open: false, fund: null, type: 'buy' });
+        showToast('净值暂未更新，已加入待处理队列', 'info');
+        return;
+    }
+
     const current = holdings[fund.code] || { share: 0, cost: 0 };
     const isBuy = tradeModal.type === 'buy';
 
@@ -2187,6 +2332,15 @@ export default function HomePage() {
     }, 3000);
   };
 
+  const handleOpenLogin = () => {
+    setUserMenuOpen(false);
+    if (!isSupabaseConfigured) {
+      showToast('未配置 Supabase，无法登录', 'error');
+      return;
+    }
+    setLoginModalOpen(true);
+  };
+
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [cloudConfigModal, setCloudConfigModal] = useState({ open: false, userId: null });
   const syncDebounceRef = useRef(null);
@@ -2222,11 +2376,11 @@ export default function HomePage() {
   }, []);
 
   const storageHelper = useMemo(() => {
-    const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings']);
+    const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings', 'pendingTrades']);
     const triggerSync = (key) => {
       if (keys.has(key)) {
         if (!skipSyncRef.current) {
-          window.localStorage.setItem('localUpdatedAt', new Date().toISOString());
+          window.localStorage.setItem('localUpdatedAt', nowInTz().toISOString());
         }
         scheduleSync();
       }
@@ -2243,7 +2397,7 @@ export default function HomePage() {
       clear: () => {
         window.localStorage.clear();
         if (!skipSyncRef.current) {
-          window.localStorage.setItem('localUpdatedAt', new Date().toISOString());
+          window.localStorage.setItem('localUpdatedAt', nowInTz().toISOString());
         }
         scheduleSync();
       }
@@ -2251,7 +2405,7 @@ export default function HomePage() {
   }, [scheduleSync]);
 
   useEffect(() => {
-    const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings']);
+    const keys = new Set(['funds', 'favorites', 'groups', 'collapsedCodes', 'refreshMs', 'holdings', 'pendingTrades']);
     const onStorage = (e) => {
       if (!e.key || keys.has(e.key)) scheduleSync();
     };
@@ -2401,6 +2555,11 @@ export default function HomePage() {
       if (Array.isArray(savedFavorites)) {
         setFavorites(new Set(savedFavorites));
       }
+      // 加载待处理交易
+      const savedPending = JSON.parse(localStorage.getItem('pendingTrades') || '[]');
+      if (Array.isArray(savedPending)) {
+        setPendingTrades(savedPending);
+      }
       // 加载分组状态
       const savedGroups = JSON.parse(localStorage.getItem('groups') || '[]');
       if (Array.isArray(savedGroups)) {
@@ -2416,6 +2575,11 @@ export default function HomePage() {
 
   // 初始化认证状态监听
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setUser(null);
+      setUserMenuOpen(false);
+      return;
+    }
     const clearAuthState = () => {
       setUser(null);
       setUserMenuOpen(false);
@@ -2482,7 +2646,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!isSupabaseConfigured || !user?.id) return;
     const channel = supabase
       .channel(`user-configs-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
@@ -2509,6 +2673,10 @@ export default function HomePage() {
     e.preventDefault();
     setLoginError('');
     setLoginSuccess('');
+    if (!isSupabaseConfigured) {
+      showToast('未配置 Supabase，无法登录', 'error');
+      return;
+    }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!loginEmail.trim()) {
@@ -2549,6 +2717,10 @@ export default function HomePage() {
       setLoginError('请输入邮箱中的验证码');
       return;
     }
+    if (!isSupabaseConfigured) {
+      showToast('未配置 Supabase，无法登录', 'error');
+      return;
+    }
     try {
       setLoginLoading(true);
       const { data, error } = await supabase.auth.verifyOtp({
@@ -2574,6 +2746,16 @@ export default function HomePage() {
   // 登出
   const handleLogout = async () => {
     isLoggingOutRef.current = true;
+    if (!isSupabaseConfigured) {
+      setLoginModalOpen(false);
+      setLoginError('');
+      setLoginSuccess('');
+      setLoginEmail('');
+      setLoginOtp('');
+      setUserMenuOpen(false);
+      setUser(null);
+      return;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -2640,351 +2822,15 @@ export default function HomePage() {
     };
   }, [funds, refreshMs]);
 
-  // --- 辅助：JSONP 数据抓取逻辑 ---
-  const loadScript = (url) => {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = url;
-      script.async = true;
-      script.onload = () => {
-        document.body.removeChild(script);
-        resolve();
-      };
-      script.onerror = () => {
-        document.body.removeChild(script);
-        reject(new Error('数据加载失败'));
-      };
-      document.body.appendChild(script);
-    });
-  };
-
-  // 当估值接口无法获取数据时，使用腾讯接口获取基金基本信息和净值（回退方案）
-  const fetchFundDataFallback = async (c) => {
-    return new Promise(async (resolve, reject) => {
-      // 先通过东方财富搜索接口获取基金名称
-      const searchCallbackName = `SuggestData_fallback_${Date.now()}`;
-      const searchUrl = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(c)}&callback=${searchCallbackName}&_=${Date.now()}`;
-
-      let fundName = '';
-
-      try {
-        await new Promise((resSearch, rejSearch) => {
-          window[searchCallbackName] = (data) => {
-            if (data && data.Datas && data.Datas.length > 0) {
-              const found = data.Datas.find(d => d.CODE === c);
-              if (found) {
-                fundName = found.NAME || found.SHORTNAME || '';
-              }
-            }
-            delete window[searchCallbackName];
-            resSearch();
-          };
-
-          const script = document.createElement('script');
-          script.src = searchUrl;
-          script.async = true;
-          script.onload = () => {
-            if (document.body.contains(script)) document.body.removeChild(script);
-          };
-          script.onerror = () => {
-            if (document.body.contains(script)) document.body.removeChild(script);
-            delete window[searchCallbackName];
-            rejSearch(new Error('搜索接口失败'));
-          };
-          document.body.appendChild(script);
-
-          // 超时处理
-          setTimeout(() => {
-            if (window[searchCallbackName]) {
-              delete window[searchCallbackName];
-              resSearch();
-            }
-          }, 3000);
-        });
-      } catch (e) {
-        // 搜索失败，继续尝试腾讯接口
-      }
-
-      // 使用腾讯接口获取净值数据
-      const tUrl = `https://qt.gtimg.cn/q=jj${c}`;
-      const tScript = document.createElement('script');
-      tScript.src = tUrl;
-      tScript.onload = () => {
-        const v = window[`v_jj${c}`];
-        if (v && v.length > 5) {
-          const p = v.split('~');
-          // p[1]: 基金名称, p[5]: 单位净值, p[7]: 涨跌幅, p[8]: 净值日期
-          const name = fundName || p[1] || `未知基金(${c})`;
-          const dwjz = p[5];
-          const zzl = parseFloat(p[7]);
-          const jzrq = p[8] ? p[8].slice(0, 10) : '';
-
-          if (dwjz) {
-            // 成功获取净值数据
-            resolve({
-              code: c,
-              name: name,
-              dwjz: dwjz,
-              gsz: null, // 无估值数据
-              gztime: null,
-              jzrq: jzrq,
-              gszzl: null, // 无估值涨跌幅
-              zzl: !isNaN(zzl) ? zzl : null,
-              noValuation: true, // 标记为无估值数据
-              holdings: []
-            });
-          } else {
-            reject(new Error('未能获取到基金数据'));
-          }
-        } else {
-          reject(new Error('未能获取到基金数据'));
-        }
-        if (document.body.contains(tScript)) document.body.removeChild(tScript);
-      };
-      tScript.onerror = () => {
-        if (document.body.contains(tScript)) document.body.removeChild(tScript);
-        reject(new Error('基金数据加载失败'));
-      };
-      document.body.appendChild(tScript);
-    });
-  };
-
-  const fetchFundData = async (c) => {
-    return new Promise(async (resolve, reject) => {
-      // 腾讯接口识别逻辑优化
-      const getTencentPrefix = (code) => {
-        if (code.startsWith('6') || code.startsWith('9')) return 'sh';
-        if (code.startsWith('0') || code.startsWith('3')) return 'sz';
-        if (code.startsWith('4') || code.startsWith('8')) return 'bj';
-        return 'sz';
-      };
-
-      const gzUrl = `https://fundgz.1234567.com.cn/js/${c}.js?rt=${Date.now()}`;
-
-      // 使用更安全的方式处理全局回调，避免并发覆盖
-      const currentCallback = `jsonpgz_${c}_${Math.random().toString(36).slice(2, 7)}`;
-
-      // 动态拦截并处理 jsonpgz 回调
-      const scriptGz = document.createElement('script');
-      // 东方财富接口固定调用 jsonpgz，我们通过修改全局变量临时捕获它
-      scriptGz.src = gzUrl;
-
-      const originalJsonpgz = window.jsonpgz;
-      window.jsonpgz = (json) => {
-        window.jsonpgz = originalJsonpgz; // 立即恢复
-        if (!json || typeof json !== 'object') {
-          // 估值数据无法获取时，尝试使用腾讯接口获取基金基本信息和净值
-          fetchFundDataFallback(c).then(resolve).catch(reject);
-          return;
-        }
-        const gszzlNum = Number(json.gszzl);
-        const gzData = {
-          code: json.fundcode,
-          name: json.name,
-          dwjz: json.dwjz,
-          gsz: json.gsz,
-          gztime: json.gztime,
-          jzrq: json.jzrq,
-          gszzl: Number.isFinite(gszzlNum) ? gszzlNum : json.gszzl
-        };
-
-        // 并行获取：1. 腾讯接口获取最新确权净值和涨跌幅；2. 东方财富接口获取持仓
-        const tencentPromise = new Promise((resolveT) => {
-          const tUrl = `https://qt.gtimg.cn/q=jj${c}`;
-          const tScript = document.createElement('script');
-          tScript.src = tUrl;
-          tScript.onload = () => {
-            const v = window[`v_jj${c}`];
-            if (v) {
-              const p = v.split('~');
-              // p[5]: 单位净值, p[7]: 涨跌幅, p[8]: 净值日期
-              resolveT({
-                dwjz: p[5],
-                zzl: parseFloat(p[7]),
-                jzrq: p[8] ? p[8].slice(0, 10) : ''
-              });
-            } else {
-              resolveT(null);
-            }
-            if (document.body.contains(tScript)) document.body.removeChild(tScript);
-          };
-          tScript.onerror = () => {
-            if (document.body.contains(tScript)) document.body.removeChild(tScript);
-            resolveT(null);
-          };
-          document.body.appendChild(tScript);
-        });
-
-        const holdingsPromise = new Promise((resolveH) => {
-          const holdingsUrl = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${c}&topline=10&year=&month=&_=${Date.now()}`;
-          loadScript(holdingsUrl).then(async () => {
-            let holdings = [];
-            const html = window.apidata?.content || '';
-            const headerRow = (html.match(/<thead[\s\S]*?<tr[\s\S]*?<\/tr>[\s\S]*?<\/thead>/i) || [])[0] || '';
-            const headerCells = (headerRow.match(/<th[\s\S]*?>([\s\S]*?)<\/th>/gi) || []).map(th => th.replace(/<[^>]*>/g, '').trim());
-            let idxCode = -1, idxName = -1, idxWeight = -1;
-            headerCells.forEach((h, i) => {
-              const t = h.replace(/\s+/g, '');
-              if (idxCode < 0 && (t.includes('股票代码') || t.includes('证券代码'))) idxCode = i;
-              if (idxName < 0 && (t.includes('股票名称') || t.includes('证券名称'))) idxName = i;
-              if (idxWeight < 0 && (t.includes('占净值比例') || t.includes('占比'))) idxWeight = i;
-            });
-            const rows = html.match(/<tbody[\s\S]*?<\/tbody>/i) || [];
-            const dataRows = rows.length ? rows[0].match(/<tr[\s\S]*?<\/tr>/gi) || [] : html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-            for (const r of dataRows) {
-              const tds = (r.match(/<td[\s\S]*?>([\s\S]*?)<\/td>/gi) || []).map(td => td.replace(/<[^>]*>/g, '').trim());
-              if (!tds.length) continue;
-              let code = '';
-              let name = '';
-              let weight = '';
-              if (idxCode >= 0 && tds[idxCode]) {
-                const m = tds[idxCode].match(/(\d{6})/);
-                code = m ? m[1] : tds[idxCode];
-              } else {
-                const codeIdx = tds.findIndex(txt => /^\d{6}$/.test(txt));
-                if (codeIdx >= 0) code = tds[codeIdx];
-              }
-              if (idxName >= 0 && tds[idxName]) {
-                name = tds[idxName];
-              } else if (code) {
-                const i = tds.findIndex(txt => txt && txt !== code && !/%$/.test(txt));
-                name = i >= 0 ? tds[i] : '';
-              }
-              if (idxWeight >= 0 && tds[idxWeight]) {
-                const wm = tds[idxWeight].match(/([\d.]+)\s*%/);
-                weight = wm ? `${wm[1]}%` : tds[idxWeight];
-              } else {
-                const wIdx = tds.findIndex(txt => /\d+(?:\.\d+)?\s*%/.test(txt));
-                weight = wIdx >= 0 ? tds[wIdx].match(/([\d.]+)\s*%/)?.[1] + '%' : '';
-              }
-              if (code || name || weight) {
-                holdings.push({ code, name, weight, change: null });
-              }
-            }
-            holdings = holdings.slice(0, 10);
-            const needQuotes = holdings.filter(h => /^\d{6}$/.test(h.code) || /^\d{5}$/.test(h.code));
-            if (needQuotes.length) {
-              try {
-                const tencentCodes = needQuotes.map(h => {
-                  const cd = String(h.code || '');
-                  if (/^\d{6}$/.test(cd)) {
-                    const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
-                    return `s_${pfx}${cd}`;
-                  }
-                  if (/^\d{5}$/.test(cd)) {
-                    return `s_hk${cd}`;
-                  }
-                  return null;
-                }).filter(Boolean).join(',');
-                if (!tencentCodes) {
-                  resolveH(holdings);
-                  return;
-                }
-                const quoteUrl = `https://qt.gtimg.cn/q=${tencentCodes}`;
-                await new Promise((resQuote) => {
-                  const scriptQuote = document.createElement('script');
-                  scriptQuote.src = quoteUrl;
-                  scriptQuote.onload = () => {
-                    needQuotes.forEach(h => {
-                      const cd = String(h.code || '');
-                      let varName = '';
-                      if (/^\d{6}$/.test(cd)) {
-                        const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
-                        varName = `v_s_${pfx}${cd}`;
-                      } else if (/^\d{5}$/.test(cd)) {
-                        varName = `v_s_hk${cd}`;
-                      } else {
-                        return;
-                      }
-                      const dataStr = window[varName];
-                      if (dataStr) {
-                        const parts = dataStr.split('~');
-                        if (parts.length > 5) {
-                          h.change = parseFloat(parts[5]);
-                        }
-                      }
-                    });
-                    if (document.body.contains(scriptQuote)) document.body.removeChild(scriptQuote);
-                    resQuote();
-                  };
-                  scriptQuote.onerror = () => {
-                    if (document.body.contains(scriptQuote)) document.body.removeChild(scriptQuote);
-                    resQuote();
-                  };
-                  document.body.appendChild(scriptQuote);
-                });
-              } catch (e) { }
-            }
-            resolveH(holdings);
-          }).catch(() => resolveH([]));
-        });
-
-        Promise.all([tencentPromise, holdingsPromise]).then(([tData, holdings]) => {
-          if (tData) {
-            // 如果腾讯数据的日期更新（或相同），优先使用腾讯的净值数据（通常更准且包含涨跌幅）
-            if (tData.jzrq && (!gzData.jzrq || tData.jzrq >= gzData.jzrq)) {
-              gzData.dwjz = tData.dwjz;
-              gzData.jzrq = tData.jzrq;
-              gzData.zzl = tData.zzl; // 真实涨跌幅
-            }
-          }
-          resolve({ ...gzData, holdings });
-        });
-      };
-
-      scriptGz.onerror = () => {
-        window.jsonpgz = originalJsonpgz;
-        if (document.body.contains(scriptGz)) document.body.removeChild(scriptGz);
-        reject(new Error('基金数据加载失败'));
-      };
-
-      document.body.appendChild(scriptGz);
-      // 加载完立即移除脚本
-      setTimeout(() => {
-        if (document.body.contains(scriptGz)) document.body.removeChild(scriptGz);
-      }, 5000);
-    });
-  };
-
   const performSearch = async (val) => {
     if (!val.trim()) {
       setSearchResults([]);
       return;
     }
     setIsSearching(true);
-    // 使用 JSONP 方式获取数据，添加 callback 参数
-    const callbackName = `SuggestData_${Date.now()}`;
-    const url = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(val)}&callback=${callbackName}&_=${Date.now()}`;
-
     try {
-      await new Promise((resolve, reject) => {
-        window[callbackName] = (data) => {
-          if (data && data.Datas) {
-            // 过滤出基金类型的数据 (CATEGORY 为 700 是公募基金)
-            const fundsOnly = data.Datas.filter(d =>
-              d.CATEGORY === 700 ||
-              d.CATEGORY === "700" ||
-              d.CATEGORYDESC === "基金"
-            );
-            setSearchResults(fundsOnly);
-          }
-          delete window[callbackName];
-          resolve();
-        };
-
-        const script = document.createElement('script');
-        script.src = url;
-        script.async = true;
-        script.onload = () => {
-          if (document.body.contains(script)) document.body.removeChild(script);
-        };
-        script.onerror = () => {
-          if (document.body.contains(script)) document.body.removeChild(script);
-          delete window[callbackName];
-          reject(new Error('搜索请求失败'));
-        };
-        document.body.appendChild(script);
-      });
+      const fundsOnly = await searchFunds(val);
+      setSearchResults(fundsOnly);
     } catch (e) {
       console.error('搜索失败', e);
     } finally {
@@ -3086,6 +2932,11 @@ export default function HomePage() {
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
+      try {
+        await processPendingQueue();
+      }catch (e) {
+        showToast('待交易队列计算出错', 'error')
+      }
     }
   };
 
@@ -3195,6 +3046,13 @@ export default function HomePage() {
       storageHelper.setItem('holdings', JSON.stringify(next));
       return next;
     });
+
+    // 同步删除待处理交易
+    setPendingTrades(prev => {
+      const next = prev.filter((trade) => trade?.fundCode !== removeCode);
+      storageHelper.setItem('pendingTrades', JSON.stringify(next));
+      return next;
+    });
   };
 
   const manualRefresh = async () => {
@@ -3223,7 +3081,8 @@ export default function HomePage() {
       groups: Array.isArray(payload.groups) ? payload.groups : [],
       collapsedCodes: Array.isArray(payload.collapsedCodes) ? payload.collapsedCodes : [],
       refreshMs: Number.isFinite(payload.refreshMs) ? payload.refreshMs : 30000,
-      holdings: payload.holdings && typeof payload.holdings === 'object' ? payload.holdings : {}
+      holdings: payload.holdings && typeof payload.holdings === 'object' ? payload.holdings : {},
+      pendingTrades: Array.isArray(payload.pendingTrades) ? payload.pendingTrades : []
     });
   }
 
@@ -3239,6 +3098,7 @@ export default function HomePage() {
           : []
       );
       const holdings = JSON.parse(localStorage.getItem('holdings') || '{}');
+      const pendingTrades = JSON.parse(localStorage.getItem('pendingTrades') || '[]');
       const cleanedHoldings = holdings && typeof holdings === 'object' && !Array.isArray(holdings)
         ? Object.entries(holdings).reduce((acc, [code, value]) => {
           if (!fundCodes.has(code) || !value || typeof value !== 'object') return acc;
@@ -3277,6 +3137,9 @@ export default function HomePage() {
             : []
         }))
         : [];
+      const cleanedPendingTrades = Array.isArray(pendingTrades)
+        ? pendingTrades.filter((trade) => trade && fundCodes.has(trade.fundCode))
+        : [];
       return {
         funds,
         favorites: cleanedFavorites,
@@ -3284,7 +3147,8 @@ export default function HomePage() {
         collapsedCodes: cleanedCollapsed,
         refreshMs: parseInt(localStorage.getItem('refreshMs') || '30000', 10),
         holdings: cleanedHoldings,
-        exportedAt: new Date().toISOString()
+        pendingTrades: cleanedPendingTrades,
+        exportedAt: nowInTz().toISOString()
       };
     } catch {
       return {
@@ -3294,7 +3158,8 @@ export default function HomePage() {
         collapsedCodes: [],
         refreshMs: 30000,
         holdings: {},
-        exportedAt: new Date().toISOString()
+        pendingTrades: [],
+        exportedAt: nowInTz().toISOString()
       };
     }
   };
@@ -3304,11 +3169,12 @@ export default function HomePage() {
     skipSyncRef.current = true;
     try {
       if (cloudUpdatedAt) {
-        storageHelper.setItem('localUpdatedAt', new Date(cloudUpdatedAt).toISOString());
+        storageHelper.setItem('localUpdatedAt', toTz(cloudUpdatedAt).toISOString());
       }
       const nextFunds = Array.isArray(cloudData.funds) ? dedupeByCode(cloudData.funds) : [];
       setFunds(nextFunds);
       storageHelper.setItem('funds', JSON.stringify(nextFunds));
+      const nextFundCodes = new Set(nextFunds.map((f) => f.code));
 
       const nextFavorites = Array.isArray(cloudData.favorites) ? cloudData.favorites : [];
       setFavorites(new Set(nextFavorites));
@@ -3334,6 +3200,12 @@ export default function HomePage() {
       const nextHoldings = cloudData.holdings && typeof cloudData.holdings === 'object' ? cloudData.holdings : {};
       setHoldings(nextHoldings);
       storageHelper.setItem('holdings', JSON.stringify(nextHoldings));
+
+      const nextPendingTrades = Array.isArray(cloudData.pendingTrades)
+        ? cloudData.pendingTrades.filter((trade) => trade && nextFundCodes.has(trade.fundCode))
+        : [];
+      setPendingTrades(nextPendingTrades);
+      storageHelper.setItem('pendingTrades', JSON.stringify(nextPendingTrades));
 
       if (nextFunds.length) {
         const codes = Array.from(new Set(nextFunds.map((f) => f.code)));
@@ -3393,7 +3265,7 @@ export default function HomePage() {
     try {
       setIsSyncing(true);
       const payload = collectLocalPayload();
-      const now = new Date().toISOString();
+      const now = nowInTz().toISOString();
       const { data: upsertData, error: updateError } = await supabase
         .from('user_configs')
         .upsert(
@@ -3418,7 +3290,8 @@ export default function HomePage() {
       }
     } catch (e) {
       console.error('同步云端配置异常', e);
-      showToast(`同步云端配置异常:${e}`, 'error');
+      // 临时关闭同步异常提示
+      // showToast(`同步云端配置异常:${e}`, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -3439,7 +3312,8 @@ export default function HomePage() {
         collapsedCodes: JSON.parse(localStorage.getItem('collapsedCodes') || '[]'),
         refreshMs: parseInt(localStorage.getItem('refreshMs') || '30000', 10),
         holdings: JSON.parse(localStorage.getItem('holdings') || '{}'),
-        exportedAt: new Date().toISOString()
+        pendingTrades: JSON.parse(localStorage.getItem('pendingTrades') || '[]'),
+        exportedAt: nowInTz().toISOString()
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       if (window.showSaveFilePicker) {
@@ -3491,6 +3365,7 @@ export default function HomePage() {
         const currentFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
         const currentGroups = JSON.parse(localStorage.getItem('groups') || '[]');
         const currentCollapsed = JSON.parse(localStorage.getItem('collapsedCodes') || '[]');
+        const currentPendingTrades = JSON.parse(localStorage.getItem('pendingTrades') || '[]');
 
         let mergedFunds = currentFunds;
         let appendedCodes = [];
@@ -3550,6 +3425,28 @@ export default function HomePage() {
           storageHelper.setItem('holdings', JSON.stringify(mergedHoldings));
         }
 
+        if (Array.isArray(data.pendingTrades)) {
+          const existingPending = Array.isArray(currentPendingTrades) ? currentPendingTrades : [];
+          const incomingPending = data.pendingTrades.filter((trade) => trade && trade.fundCode);
+          const fundCodeSet = new Set(mergedFunds.map((f) => f.code));
+          const keyOf = (trade) => {
+            if (trade?.id) return `id:${trade.id}`;
+            return `k:${trade?.fundCode || ''}:${trade?.type || ''}:${trade?.date || ''}:${trade?.share || ''}:${trade?.amount || ''}:${trade?.isAfter3pm ? 1 : 0}`;
+          };
+          const mergedPendingMap = new Map();
+          existingPending.forEach((trade) => {
+            if (!trade || !fundCodeSet.has(trade.fundCode)) return;
+            mergedPendingMap.set(keyOf(trade), trade);
+          });
+          incomingPending.forEach((trade) => {
+            if (!fundCodeSet.has(trade.fundCode)) return;
+            mergedPendingMap.set(keyOf(trade), trade);
+          });
+          const mergedPending = Array.from(mergedPendingMap.values());
+          setPendingTrades(mergedPending);
+          storageHelper.setItem('pendingTrades', JSON.stringify(mergedPending));
+        }
+
         // 导入成功后，仅刷新新追加的基金
         if (appendedCodes.length) {
           // 这里需要确保 refreshAll 不会因为闭包问题覆盖掉刚刚合并好的 mergedFunds
@@ -3587,7 +3484,8 @@ export default function HomePage() {
       !!clearConfirm ||
       donateOpen ||
       !!fundDeleteConfirm ||
-      updateModalOpen;
+      updateModalOpen ||
+      weChatOpen;
 
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -3613,7 +3511,8 @@ export default function HomePage() {
     tradeModal.open,
     clearConfirm,
     donateOpen,
-    updateModalOpen
+    updateModalOpen,
+    weChatOpen
   ]);
 
   useEffect(() => {
@@ -3787,10 +3686,7 @@ export default function HomePage() {
                     <>
                       <button
                         className="user-menu-item"
-                        onClick={() => {
-                          setUserMenuOpen(false);
-                          setLoginModalOpen(true);
-                        }}
+                        onClick={handleOpenLogin}
                       >
                         <LoginIcon width="16" height="16" />
                         <span>登录</span>
@@ -4244,8 +4140,8 @@ export default function HomePage() {
                                   </div>
                                 </div>
                                 {(() => {
-                                  const now = new Date();
-                                  const isAfter9 = now.getHours() >= 9;
+                                  const now = nowInTz();
+                                  const isAfter9 = now.hour() >= 9;
                                   const hasTodayData = f.jzrq === todayStr;
                                   const shouldHideChange = isTradingDay && isAfter9 && !hasTodayData;
 
@@ -4461,8 +4357,8 @@ export default function HomePage() {
                                   ) : (
                                     <>
                                       {(() => {
-                                        const now = new Date();
-                                        const isAfter9 = now.getHours() >= 9;
+                                        const now = nowInTz();
+                                        const isAfter9 = now.hour() >= 9;
                                         const hasTodayData = f.jzrq === todayStr;
                                         const shouldHideChange = isTradingDay && isAfter9 && !hasTodayData;
 
@@ -4703,7 +4599,13 @@ export default function HomePage() {
             key={feedbackNonce}
             onClose={() => setFeedbackOpen(false)}
             user={user}
+            onOpenWeChat={() => setWeChatOpen(true)}
           />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {weChatOpen && (
+            <WeChatModal onClose={() => setWeChatOpen(false)} />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -4741,8 +4643,18 @@ export default function HomePage() {
           <TradeModal
             type={tradeModal.type}
             fund={tradeModal.fund}
+            holding={holdings[tradeModal.fund?.code]}
             onClose={() => setTradeModal({ open: false, fund: null, type: 'buy' })}
             onConfirm={(data) => handleTrade(tradeModal.fund, data)}
+            pendingTrades={pendingTrades}
+            onDeletePending={(id) => {
+                setPendingTrades(prev => {
+                    const next = prev.filter(t => t.id !== id);
+                    storageHelper.setItem('pendingTrades', JSON.stringify(next));
+                    return next;
+                });
+                showToast('已撤销待处理交易', 'success');
+            }}
           />
         )}
       </AnimatePresence>
