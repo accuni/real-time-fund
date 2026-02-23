@@ -280,6 +280,7 @@ export default function HomePage() {
   const timerRef = useRef(null);
   const refreshingRef = useRef(false);
   const isLoggingOutRef = useRef(false);
+  const isExplicitLoginRef = useRef(false);
 
   // 刷新频率状态
   const [refreshMs, setRefreshMs] = useState(30000);
@@ -1524,7 +1525,7 @@ export default function HomePage() {
       setUserMenuOpen(false);
     };
 
-    const handleSession = async (session, event) => {
+    const handleSession = async (session, event, isExplicitLogin = false) => {
       if (!session?.user) {
         if (event === 'SIGNED_OUT' && !isLoggingOutRef.current) {
           setLoginError('会话已过期，请重新登录');
@@ -1567,7 +1568,8 @@ export default function HomePage() {
         setLoginError('');
       }
       // 仅在明确的登录动作（SIGNED_IN）时检查冲突；INITIAL_SESSION（刷新页面等）不检查，直接以云端为准
-      fetchCloudConfig(session.user.id, event === 'SIGNED_IN');
+      debugger
+      fetchCloudConfig(session.user.id, isExplicitLogin);
     };
 
     supabase.auth.getSession().then(async ({ data, error }) => {
@@ -1581,7 +1583,11 @@ export default function HomePage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // INITIAL_SESSION 会由 getSession() 主动触发，这里不再重复处理
       if (event === 'INITIAL_SESSION') return;
-      await handleSession(session ?? null, event);
+      const isExplicitLogin = event === 'SIGNED_IN' && isExplicitLoginRef.current;
+      await handleSession(session ?? null, event, isExplicitLogin);
+      if (event === 'SIGNED_IN') {
+        isExplicitLoginRef.current = false;
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -1664,6 +1670,7 @@ export default function HomePage() {
       return;
     }
     try {
+      isExplicitLoginRef.current = true;
       setLoginLoading(true);
       const { data, error } = await supabase.auth.verifyOtp({
         email: loginEmail.trim(),
@@ -1677,10 +1684,10 @@ export default function HomePage() {
         setLoginOtp('');
         setLoginSuccess('');
         setLoginError('');
-        fetchCloudConfig(data.user.id);
       }
     } catch (err) {
       setLoginError(err.message || '验证失败，请检查验证码或稍后再试');
+      isExplicitLoginRef.current = false;
     }
     setLoginLoading(false);
   };
@@ -2043,6 +2050,15 @@ export default function HomePage() {
       storageHelper.setItem('pendingTrades', JSON.stringify(next));
       return next;
     });
+
+    // 同步删除该基金的交易记录
+    setTransactions(prev => {
+      if (!prev[removeCode]) return prev;
+      const next = { ...prev };
+      delete next[removeCode];
+      storageHelper.setItem('transactions', JSON.stringify(next));
+      return next;
+    });
   };
 
   const manualRefresh = async () => {
@@ -2147,6 +2163,32 @@ export default function HomePage() {
           })
       : [];
 
+    const transactionsSource = payload.transactions && typeof payload.transactions === 'object' && !Array.isArray(payload.transactions)
+      ? payload.transactions
+      : {};
+    const transactions = {};
+    Object.keys(transactionsSource)
+      .map(normalizeCode)
+      .filter((code) => uniqueFundCodes.includes(code))
+      .sort()
+      .forEach((code) => {
+        const list = Array.isArray(transactionsSource[code]) ? transactionsSource[code] : [];
+        const normalized = list
+          .map((t) => {
+            const id = t?.id ? String(t.id) : '';
+            const type = t?.type || '';
+            const share = normalizeNumber(t?.share);
+            const amount = normalizeNumber(t?.amount);
+            const price = normalizeNumber(t?.price);
+            const date = t?.date || '';
+            const timestamp = Number.isFinite(t?.timestamp) ? t.timestamp : 0;
+            return { id, type, share, amount, price, date, timestamp };
+          })
+          .filter((t) => t.id || t.timestamp)
+          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        if (normalized.length > 0) transactions[code] = normalized;
+      });
+
     const viewMode = payload.viewMode === 'list' ? 'list' : 'card';
 
     return JSON.stringify({
@@ -2158,6 +2200,7 @@ export default function HomePage() {
       refreshMs: Number.isFinite(payload.refreshMs) ? payload.refreshMs : 30000,
       holdings,
       pendingTrades,
+      transactions,
       viewMode
     });
   }
@@ -2362,6 +2405,7 @@ export default function HomePage() {
         if (localComparable !== cloudComparable) {
           // 如果数据不一致
           if (checkConflict) {
+            debugger
             // 只有明确要求检查冲突时才提示（例如刚登录时）
             setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: data.data });
             return;
