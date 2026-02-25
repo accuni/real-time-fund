@@ -35,6 +35,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, trans
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const chartRef = useRef(null);
+  const hoverTimeoutRef = useRef(null);
 
   useEffect(() => {
     // If collapsed, don't fetch data unless we have no data yet
@@ -198,7 +199,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, trans
         },
         y: {
           display: true,
-          position: 'right',
+          position: 'left',
           grid: {
             color: '#1f2937',
             drawBorder: false,
@@ -217,14 +218,61 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, trans
         mode: 'index',
         intersect: false,
       },
-      onHover: (event, chartElement) => {
-        event.native.target.style.cursor = chartElement[0] ? 'crosshair' : 'default';
+      onHover: (event, chartElement, chart) => {
+        const target = event?.native?.target;
+        const currentChart = chart || chartRef.current;
+        if (!currentChart) return;
+
+        const tooltipActive = currentChart.tooltip?._active ?? [];
+        const activeElements = currentChart.getActiveElements
+          ? currentChart.getActiveElements()
+          : [];
+        const hasActive =
+          (chartElement && chartElement.length > 0) ||
+          (tooltipActive && tooltipActive.length > 0) ||
+          (activeElements && activeElements.length > 0);
+
+        if (target) {
+          target.style.cursor = hasActive ? 'crosshair' : 'default';
+        }
+
+        // 仅用于桌面端 hover 改变光标，不在这里做 2 秒清除，避免移动端 hover 事件不稳定
+      },
+      onClick: () => {}
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
       }
     };
   }, []);
 
   const plugins = useMemo(() => [{
     id: 'crosshair',
+    afterEvent: (chart, args) => {
+      const { event, replay } = args || {};
+      if (!event || replay) return; // 忽略动画重放
+    
+      const type = event.type;
+      if (type === 'mousemove' || type === 'click') {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+    
+        hoverTimeoutRef.current = setTimeout(() => {
+          if (!chart) return;
+          chart.setActiveElements([]);
+          if (chart.tooltip) {
+            chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+          }
+          chart.update();
+        }, 2000);
+      }
+    },
     afterDraw: (chart) => {
       const ctx = chart.ctx;
       const datasets = chart.data.datasets;
@@ -360,10 +408,10 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, trans
                const valueStr = (typeof value === 'number' ? value.toFixed(2) : value) + '%';
                const valWidth = ctx.measureText(valueStr).width + 8;
                ctx.fillStyle = primaryColor;
-               ctx.fillRect(rightX - valWidth, y - 8, valWidth, 16);
+               ctx.fillRect(leftX, y - 8, valWidth, 16);
                ctx.fillStyle = '#0f172a'; // --background
                ctx.textAlign = 'center';
-               ctx.fillText(valueStr, rightX - valWidth / 2, y);
+               ctx.fillText(valueStr, leftX + valWidth / 2, y);
            }
         }
 
