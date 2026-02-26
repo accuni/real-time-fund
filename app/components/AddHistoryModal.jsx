@@ -187,6 +187,7 @@ export default function AddHistoryModal({ fund, onClose, onConfirm }) {
           </label>
           <input
             type="number"
+            inputMode="decimal"
             className="input"
             value={amount}
             onChange={handleAmountChange}
@@ -194,6 +195,10 @@ export default function AddHistoryModal({ fund, onClose, onConfirm }) {
             step="0.01"
             disabled={!netValue}
           />
+        </div>
+
+        <div className="muted" style={{ fontSize: '11px', lineHeight: 1.5, marginBottom: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          *此处补录的买入/卖出仅作记录展示，不会改变当前持仓金额与份额；实际持仓请在持仓设置中维护。
         </div>
 
         <button
