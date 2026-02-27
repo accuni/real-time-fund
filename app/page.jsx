@@ -36,6 +36,7 @@ import TradeModal from "./components/TradeModal";
 import TransactionHistoryModal from "./components/TransactionHistoryModal";
 import AddHistoryModal from "./components/AddHistoryModal";
 import UpdatePromptModal from "./components/UpdatePromptModal";
+import RefreshButton from "./components/RefreshButton";
 import WeChatModal from "./components/WeChatModal";
 import DcaModal from "./components/DcaModal";
 import githubImg from "./assets/github.svg";
@@ -311,8 +312,6 @@ export default function HomePage() {
 
   // 全局刷新状态
   const [refreshing, setRefreshing] = useState(false);
-  // 刷新周期进度 0~1，用于环形进度条
-  const [refreshProgress, setRefreshProgress] = useState(0);
 
   // 收起/展开状态
   const [collapsedCodes, setCollapsedCodes] = useState(new Set());
@@ -2134,17 +2133,6 @@ export default function HomePage() {
     };
   }, [funds, refreshMs]);
 
-  // 刷新进度条：每 100ms 更新一次进度
-  useEffect(() => {
-    if (funds.length === 0 || refreshMs <= 0) return;
-    const t = setInterval(() => {
-      const elapsed = Date.now() - refreshCycleStartRef.current;
-      const p = Math.min(1, elapsed / refreshMs);
-      setRefreshProgress(p);
-    }, 100);
-    return () => clearInterval(t);
-  }, [funds.length, refreshMs]);
-
   const performSearch = async (val) => {
     if (!val.trim()) {
       setSearchResults([]);
@@ -3447,22 +3435,13 @@ export default function HomePage() {
               </svg>
             </button>
           )}
-          <div
-            className="refresh-btn-wrap"
-            style={{ '--progress': refreshProgress }}
-            title={`刷新周期 ${Math.round(refreshMs / 1000)} 秒`}
-          >
-            <button
-              className="icon-button"
-              aria-label="立即刷新"
-              onClick={manualRefresh}
-              disabled={refreshing || funds.length === 0}
-              aria-busy={refreshing}
-              title="立即刷新"
-            >
-              <RefreshIcon className={refreshing ? 'spin' : ''} width="18" height="18" />
-            </button>
-          </div>
+          <RefreshButton
+            refreshMs={refreshMs}
+            manualRefresh={manualRefresh}
+            refreshing={refreshing}
+            fundsLength={funds.length}
+            refreshCycleStartRef={refreshCycleStartRef}
+          />
           {/*<button*/}
           {/*  className="icon-button"*/}
           {/*  aria-label="打开设置"*/}
@@ -4296,7 +4275,7 @@ export default function HomePage() {
                                 {(() => {
                                   const showIntraday = Array.isArray(valuationSeries[f.code]) && valuationSeries[f.code].length >= 2;
                                   if (!showIntraday) return null;
-                                  
+
                                   // 如果今日日期大于估值日期，说明是历史估值，不显示分时图
                                   if (f.gztime && toTz(todayStr).startOf('day').isAfter(toTz(f.gztime).startOf('day'))) {
                                     return null;
