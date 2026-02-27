@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   flexRender,
@@ -45,6 +45,43 @@ export default function PcFundTable({
   onHoldingProfitClick,
   refreshing = false,
 }) {
+  const getStoredColumnSizing = () => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      const sizing = parsed?.pcTableColumns;
+      if (!sizing || typeof sizing !== 'object') return {};
+      return Object.fromEntries(
+        Object.entries(sizing).filter(([, value]) => Number.isFinite(value)),
+      );
+    } catch {
+      return {};
+    }
+  };
+
+  const persistColumnSizing = (nextSizing) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      const parsed = raw ? JSON.parse(raw) : {};
+      const nextSettings =
+        parsed && typeof parsed === 'object'
+          ? { ...parsed, pcTableColumns: nextSizing }
+          : { pcTableColumns: nextSizing };
+      window.localStorage.setItem('customSettings', JSON.stringify(nextSettings));
+    } catch { }
+  };
+
+  const [columnSizing, setColumnSizing] = useState(() => {
+    const stored = getStoredColumnSizing();
+    if (stored.actions) {
+      const { actions, ...rest } = stored;
+      return rest;
+    }
+    return stored;
+  });
   const onRemoveFundRef = useRef(onRemoveFund);
   const onToggleFavoriteRef = useRef(onToggleFavorite);
   const onRemoveFromGroupRef = useRef(onRemoveFromGroup);
@@ -343,6 +380,17 @@ export default function PcFundTable({
     enableColumnPinning: true,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
+    onColumnSizingChange: (updater) => {
+      setColumnSizing((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        const { actions, ...rest } = next || {};
+        persistColumnSizing(rest || {});
+        return rest || {};
+      });
+    },
+    state: {
+      columnSizing,
+    },
     initialState: {
       columnPinning: {
         left: ['fundName'],
