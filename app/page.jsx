@@ -721,10 +721,17 @@ export default function HomePage() {
         const todayProfitValue = profitToday;
 
         const total = profit ? profit.profitTotal : null;
+        const principal =
+          holding && isNumber(holding.cost) && isNumber(holding.share)
+            ? holding.cost * holding.share
+            : 0;
+        const asPercent = !!percentModes[f.code];
         const holdingProfit =
           total == null
             ? ''
-            : `${total > 0 ? '+' : total < 0 ? '-' : ''}¥${Math.abs(total).toFixed(2)}`;
+            : (asPercent && principal > 0
+              ? `${total > 0 ? '+' : total < 0 ? '-' : ''}${Math.abs((total / principal) * 100).toFixed(2)}%`
+              : `${total > 0 ? '+' : total < 0 ? '-' : ''}¥${Math.abs(total).toFixed(2)}`);
         const holdingProfitValue = total;
 
         return {
@@ -748,7 +755,7 @@ export default function HomePage() {
           holdingProfitValue,
         };
       }),
-    [displayFunds, holdings, isTradingDay, todayStr, getHoldingProfit],
+    [displayFunds, holdings, isTradingDay, todayStr, getHoldingProfit, percentModes],
   );
 
   // 自动滚动选中 Tab 到可视区域
