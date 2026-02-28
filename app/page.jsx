@@ -311,6 +311,21 @@ export default function HomePage() {
   const [refreshMs, setRefreshMs] = useState(60000);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tempSeconds, setTempSeconds] = useState(60);
+  const [containerWidth, setContainerWidth] = useState(1200);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const w = parsed?.pcContainerWidth;
+      const num = Number(w);
+      if (Number.isFinite(num)) {
+        setContainerWidth(Math.min(2000, Math.max(600, num)));
+      }
+    } catch { }
+  }, []);
 
   // 全局刷新状态
   const [refreshing, setRefreshing] = useState(false);
@@ -2539,7 +2554,23 @@ export default function HomePage() {
     const ms = Math.max(30, Number(tempSeconds)) * 1000;
     setRefreshMs(ms);
     storageHelper.setItem('refreshMs', String(ms));
+    const w = Math.min(2000, Math.max(600, Number(containerWidth) || 1200));
+    setContainerWidth(w);
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      const parsed = raw ? JSON.parse(raw) : {};
+      window.localStorage.setItem('customSettings', JSON.stringify({ ...parsed, pcContainerWidth: w }));
+    } catch { }
     setSettingsOpen(false);
+  };
+
+  const handleResetContainerWidth = () => {
+    setContainerWidth(1200);
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      const parsed = raw ? JSON.parse(raw) : {};
+      window.localStorage.setItem('customSettings', JSON.stringify({ ...parsed, pcContainerWidth: 1200 }));
+    } catch { }
   };
 
   const importFileRef = useRef(null);
@@ -3301,7 +3332,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="container content">
+    <div className="container content" style={{ width: containerWidth }}>
       <AnimatePresence>
         {showThemeTransition && (
           <motion.div
@@ -4797,6 +4828,10 @@ export default function HomePage() {
           importFileRef={importFileRef}
           handleImportFileChange={handleImportFileChange}
           importMsg={importMsg}
+          isMobile={isMobile}
+          containerWidth={containerWidth}
+          setContainerWidth={setContainerWidth}
+          onResetContainerWidth={handleResetContainerWidth}
         />
       )}
 
