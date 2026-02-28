@@ -694,6 +694,8 @@ body::before {
     top: 0;
     left: 0;
     right: 0;
+    padding-left: 12px;
+    padding-right: 4px;
     border-radius: 0;
     border-top: none;
     border-left: none;
