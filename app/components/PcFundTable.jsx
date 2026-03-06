@@ -234,6 +234,7 @@ export default function PcFundTable({
           })() : null,
           pcTableColumnVisibility: pc.visibility,
           pcTableColumns: Object.keys(pc.sizing).length ? pc.sizing : null,
+          pcShowFullFundName: group.pcShowFullFundName === true,
         };
       }
     });
@@ -243,6 +244,7 @@ export default function PcFundTable({
   const [configByGroup, setConfigByGroup] = useState(getInitialConfigByGroup);
 
   const currentGroupPc = configByGroup[groupKey];
+  const showFullFundName = currentGroupPc?.pcShowFullFundName ?? false;
   const defaultPc = getDefaultPcGroupConfig();
   const columnOrder = (() => {
     const order = currentGroupPc?.pcTableColumnOrder ?? defaultPc.order;
@@ -280,11 +282,16 @@ export default function PcFundTable({
       if (updates.pcTableColumnOrder !== undefined) group.pcTableColumnOrder = updates.pcTableColumnOrder;
       if (updates.pcTableColumnVisibility !== undefined) group.pcTableColumnVisibility = updates.pcTableColumnVisibility;
       if (updates.pcTableColumns !== undefined) group.pcTableColumns = updates.pcTableColumns;
+      if (updates.pcShowFullFundName !== undefined) group.pcShowFullFundName = updates.pcShowFullFundName;
       parsed[groupKey] = group;
       window.localStorage.setItem('customSettings', JSON.stringify(parsed));
       setConfigByGroup((prev) => ({ ...prev, [groupKey]: { ...prev[groupKey], ...updates } }));
       onCustomSettingsChange?.();
     } catch { }
+  };
+
+  const handleToggleShowFullFundName = (show) => {
+    persistPcGroupConfig({ pcShowFullFundName: show });
   };
 
   const setColumnOrder = (nextOrderOrUpdater) => {
@@ -344,7 +351,7 @@ export default function PcFundTable({
     onHoldingAmountClick,
   ]);
 
-  const FundNameCell = ({ info }) => {
+  const FundNameCell = ({ info, showFullFundName }) => {
     const original = info.row.original || {};
     const code = original.code;
     const isUpdated = original.isUpdated;
@@ -393,7 +400,7 @@ export default function PcFundTable({
         )}
         <div className="title-text">
           <span
-            className={`name-text`}
+            className={`name-text ${showFullFundName ? 'show-full' : ''}`}
             title={isUpdated ? '今日净值已更新' : ''}
           >
             {info.getValue() ?? '—'}
@@ -416,7 +423,7 @@ export default function PcFundTable({
         size: 265,
         minSize: 140,
         enablePinning: true,
-        cell: (info) => <FundNameCell info={info} />,
+        cell: (info) => <FundNameCell info={info} showFullFundName={showFullFundName} />,
         meta: {
           align: 'left',
           cellClassName: 'name-cell',
@@ -690,7 +697,7 @@ export default function PcFundTable({
         },
       },
     ],
-    [currentTab, favorites, refreshing, sortBy],
+    [currentTab, favorites, refreshing, sortBy, showFullFundName],
   );
 
   const table = useReactTable({
@@ -951,6 +958,8 @@ export default function PcFundTable({
         onResetColumnOrder={handleResetColumnOrder}
         onResetColumnVisibility={handleResetColumnVisibility}
         onResetSizing={() => setResetConfirmOpen(true)}
+        showFullFundName={showFullFundName}
+        onToggleShowFullFundName={handleToggleShowFullFundName}
       />
     </div>
   );
