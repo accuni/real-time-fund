@@ -192,6 +192,7 @@ export default function MobileFundTable({
           return [...valid, ...missing];
         })() : null,
         mobileTableColumnVisibility: visibility,
+        mobileShowFullFundName: group.mobileShowFullFundName === true,
       };
     });
     return byGroup;
@@ -200,6 +201,7 @@ export default function MobileFundTable({
   const [configByGroup, setConfigByGroup] = useState(getInitialMobileConfigByGroup);
 
   const currentGroupMobile = configByGroup[groupKey];
+  const showFullFundName = currentGroupMobile?.mobileShowFullFundName ?? false;
   const defaultOrder = [...MOBILE_NON_FROZEN_COLUMN_IDS];
   const defaultVisibility = (() => {
     const o = {};
@@ -247,6 +249,28 @@ export default function MobileFundTable({
       : nextOrUpdater;
     persistMobileGroupConfig({ mobileTableColumnVisibility: next });
   };
+
+  const persistShowFullFundName = (show) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('customSettings');
+      const parsed = raw ? JSON.parse(raw) : {};
+      const group = parsed[groupKey] && typeof parsed[groupKey] === 'object' ? { ...parsed[groupKey] } : {};
+      group.mobileShowFullFundName = show;
+      parsed[groupKey] = group;
+      window.localStorage.setItem('customSettings', JSON.stringify(parsed));
+      setConfigByGroup((prev) => ({ 
+        ...prev, 
+        [groupKey]: { ...prev[groupKey], mobileShowFullFundName: show } 
+      }));
+      onCustomSettingsChange?.();
+    } catch {}
+  };
+
+  const handleToggleShowFullFundName = (show) => {
+    persistShowFullFundName(show);
+  };
+
   const [settingModalOpen, setSettingModalOpen] = useState(false);
   const tableContainerRef = useRef(null);
   const [tableContainerWidth, setTableContainerWidth] = useState(0);
@@ -306,7 +330,7 @@ export default function MobileFundTable({
   };
 
   // 移动端名称列：无拖拽把手，长按整行触发排序
-  const MobileFundNameCell = ({ info }) => {
+  const MobileFundNameCell = ({ info, showFullFundName }) => {
     const original = info.row.original || {};
     const code = original.code;
     const isUpdated = original.isUpdated;
@@ -344,7 +368,10 @@ export default function MobileFundTable({
           </button>
         )}
         <div className="title-text">
-          <span className="name-text" title={isUpdated ? '今日净值已更新' : ''}>
+          <span 
+            className={`name-text ${showFullFundName ? 'show-full' : ''}`} 
+            title={isUpdated ? '今日净值已更新' : ''}
+          >
             {info.getValue() ?? '—'}
           </span>
           {holdingAmountDisplay ? (
@@ -429,7 +456,7 @@ export default function MobileFundTable({
             </button>
           </div>
         ),
-        cell: (info) => <MobileFundNameCell info={info} />,
+        cell: (info) => <MobileFundNameCell info={info} showFullFundName={showFullFundName} />,
         meta: { align: 'left', cellClassName: 'name-cell', width: columnWidthMap.fundName },
       },
       {
@@ -555,7 +582,7 @@ export default function MobileFundTable({
         meta: { align: 'right', cellClassName: 'holding-cell', width: columnWidthMap.holdingProfit },
       },
     ],
-    [currentTab, favorites, refreshing, columnWidthMap]
+    [currentTab, favorites, refreshing, columnWidthMap, showFullFundName]
   );
 
   const table = useReactTable({
@@ -773,6 +800,8 @@ export default function MobileFundTable({
         onToggleColumnVisibility={handleToggleMobileColumnVisibility}
         onResetColumnOrder={handleResetMobileColumnOrder}
         onResetColumnVisibility={handleResetMobileColumnVisibility}
+        showFullFundName={showFullFundName}
+        onToggleShowFullFundName={handleToggleShowFullFundName}
       />
     </div>
   );
