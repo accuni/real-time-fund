@@ -30,6 +30,7 @@ import { DragIcon, ExitIcon, SettingsIcon, StarIcon, TrashIcon } from './Icons';
 const NON_FROZEN_COLUMN_IDS = [
   'yesterdayChangePercent',
   'estimateChangePercent',
+  'totalChangePercent',
   'holdingAmount',
   'todayProfit',
   'holdingProfit',
@@ -39,8 +40,9 @@ const NON_FROZEN_COLUMN_IDS = [
 const COLUMN_HEADERS = {
   latestNav: '最新净值',
   estimateNav: '估算净值',
-  yesterdayChangePercent: '昨日涨跌幅',
-  estimateChangePercent: '估值涨跌幅',
+  yesterdayChangePercent: '昨日涨幅',
+  estimateChangePercent: '估值涨幅',
+  totalChangePercent: '估算收益',
   holdingAmount: '持仓金额',
   todayProfit: '当日收益',
   holdingProfit: '持有收益',
@@ -103,8 +105,8 @@ function SortableRow({ row, children, isTableDragging, disabled }) {
  *     code?: string;                // 基金代码（可选，只用于展示在名称下方）
  *     latestNav: string|number;     // 最新净值
  *     estimateNav: string|number;   // 估算净值
- *     yesterdayChangePercent: string|number; // 昨日涨跌幅
- *     estimateChangePercent: string|number;  // 估值涨跌幅
+ *     yesterdayChangePercent: string|number; // 昨日涨幅
+ *     estimateChangePercent: string|number;  // 估值涨幅
  *     holdingAmount: string|number;         // 持仓金额
  *     todayProfit: string|number;           // 当日收益
  *     holdingProfit: string|number;         // 持有收益
@@ -361,13 +363,13 @@ export default function PcFundTable({
     const rowContext = useContext(SortableRowContext);
 
     return (
-      <div className="name-cell-content" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="name-cell-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}>
         {sortBy === 'default' && (
           <button
             className="icon-button drag-handle"
             ref={rowContext?.setActivatorNodeRef}
             {...rowContext?.listeners}
-            style={{ cursor: 'grab', padding: 2, margin: '-2px -4px -2px 0', color: 'var(--muted)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ cursor: 'grab', width: 20, height: 20, padding: 2, margin: '0', flexShrink: 0, color: 'var(--muted)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             title="拖拽排序"
             onClick={(e) => e.stopPropagation?.()}
           >
@@ -461,7 +463,7 @@ export default function PcFundTable({
       },
       {
         accessorKey: 'yesterdayChangePercent',
-        header: '昨日涨跌幅',
+        header: '昨日涨幅',
         size: 135,
         minSize: 100,
         cell: (info) => {
@@ -487,7 +489,7 @@ export default function PcFundTable({
       },
       {
         accessorKey: 'estimateChangePercent',
-        header: '估值涨跌幅',
+        header: '估值涨幅',
         size: 135,
         minSize: 100,
         cell: (info) => {
@@ -510,6 +512,39 @@ export default function PcFundTable({
         meta: {
           align: 'right',
           cellClassName: 'est-change-cell',
+        },
+      },
+      {
+        accessorKey: 'totalChangePercent',
+        header: '估算收益',
+        size: 135,
+        minSize: 100,
+        cell: (info) => {
+          const original = info.row.original || {};
+          const value = original.estimateProfitValue;
+          const hasProfit = value != null;
+          const cls = hasProfit ? (value > 0 ? 'up' : value < 0 ? 'down' : '') : 'muted';
+          const amountStr = hasProfit ? (original.estimateProfit ?? '') : '—';
+          const percentStr = original.estimateProfitPercent ?? '';
+
+          return (
+            <div style={{ width: '100%' }}>
+              <FitText className={cls} style={{ fontWeight: 700, display: 'block' }} maxFontSize={14} minFontSize={10}>
+                {amountStr}
+              </FitText>
+              {percentStr ? (
+                <span className={`${cls} estimate-profit-percent`} style={{ display: 'block', fontSize: '0.75em', opacity: 0.9, fontWeight: 500 }}>
+                  <FitText maxFontSize={11} minFontSize={9}>
+                    {percentStr}
+                  </FitText>
+                </span>
+              ) : null}
+            </div>
+          );
+        },
+        meta: {
+          align: 'right',
+          cellClassName: 'total-change-cell',
         },
       },
       {
@@ -898,6 +933,7 @@ export default function PcFundTable({
                       'estimateNav',
                       'yesterdayChangePercent',
                       'estimateChangePercent',
+                      'totalChangePercent',
                       'holdingAmount',
                       'todayProfit',
                       'holdingProfit',

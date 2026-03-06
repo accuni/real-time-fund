@@ -677,7 +677,7 @@ export default function HomePage() {
 
       if (canCalcTodayProfit) {
         const amount = holding.share * currentNav;
-        // 估值涨跌幅
+        // 估值涨幅
         const gzChange = fund.estPricedCoverage > 0.05 ? fund.estGszzl : (Number(fund.gszzl) || 0);
         profitToday = amount - (amount / (1 + gzChange / 100));
       } else {
@@ -780,6 +780,7 @@ export default function HomePage() {
             ? (isNumber(f.estGszzl) ? Number(f.estGszzl) : null)
             : (isNumber(f.gszzl) ? Number(f.gszzl) : null));
         const estimateTime = f.noValuation ? (f.jzrq || '-') : (f.gztime || f.time || '-');
+        const hasTodayEstimate = !f.noValuation && isString(f.gztime) && f.gztime.startsWith(todayStr);
 
         const holding = holdings[f.code];
         const profit = getHoldingProfit(f, holding);
@@ -814,6 +815,30 @@ export default function HomePage() {
             : '';
         const holdingProfitValue = total;
 
+        const holdingProfitPercentValue =
+          total != null && principal > 0 ? (total / principal) * 100 : null;
+        const hasEstimatePercent = hasTodayEstimate && estimateChangeValue != null;
+        const hasHoldingPercent = holdingProfitPercentValue != null;
+        const fallbackEstimateProfitPercentValue = hasEstimatePercent || hasHoldingPercent
+          ? (hasEstimatePercent ? estimateChangeValue : 0) + (hasHoldingPercent ? holdingProfitPercentValue : 0)
+          : null;
+        const estimateProfitPercentValue = hasTodayData
+          ? holdingProfitPercentValue
+          : fallbackEstimateProfitPercentValue;
+        const estimateProfitValue = hasTodayData
+          ? total
+          : (estimateProfitPercentValue != null && principal > 0
+            ? principal * (estimateProfitPercentValue / 100)
+            : null);
+        const estimateProfit =
+          estimateProfitValue == null
+            ? ''
+            : `${estimateProfitValue > 0 ? '+' : estimateProfitValue < 0 ? '-' : ''}¥${Math.abs(estimateProfitValue).toFixed(2)}`;
+        const estimateProfitPercent =
+          estimateProfitPercentValue == null
+            ? ''
+            : `${estimateProfitPercentValue > 0 ? '+' : ''}${estimateProfitPercentValue.toFixed(2)}%`;
+
         return {
           rawFund: f,
           code: f.code,
@@ -829,6 +854,11 @@ export default function HomePage() {
           estimateChangeValue,
           estimateChangeMuted: f.noValuation,
           estimateTime,
+          hasTodayEstimate,
+          totalChangePercent: estimateProfitPercent,
+          estimateProfit,
+          estimateProfitValue,
+          estimateProfitPercent,
           holdingAmount,
           holdingAmountValue,
           todayProfit,
@@ -1584,6 +1614,7 @@ export default function HomePage() {
       const fields = Array.from(new Set([
         'jzrq',
         'dwjz',
+        'gsz',
         ...(Array.isArray(extraFields) ? extraFields : [])
       ]));
       const items = list.map((item) => {
@@ -4310,8 +4341,8 @@ export default function HomePage() {
 
                                         if (shouldHideChange) return null;
 
-                                        // 不再区分“上一交易日涨跌幅”名称，统一使用“昨日涨跌幅”
-                                        const changeLabel = hasTodayData ? '涨跌幅' : '昨日涨跌幅';
+                                        // 不再区分“上一交易日涨跌幅”名称，统一使用“昨日涨幅”
+                                        const changeLabel = hasTodayData ? '涨跌幅' : '昨日涨幅';
                                         return (
                                           <Stat
                                             label={changeLabel}
@@ -4322,7 +4353,7 @@ export default function HomePage() {
                                       })()}
                                       <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       <Stat
-                                        label="估值涨跌幅"
+                                        label="估值涨幅"
                                         value={f.estPricedCoverage > 0.05 ? `${f.estGszzl > 0 ? '+' : ''}${f.estGszzl.toFixed(2)}%` : (isNumber(f.gszzl) ? `${f.gszzl > 0 ? '+' : ''}${f.gszzl.toFixed(2)}%` : f.gszzl ?? '—')}
                                         delta={f.estPricedCoverage > 0.05 ? f.estGszzl : (Number(f.gszzl) || 0)}
                                       />

@@ -29,6 +29,7 @@ import { ExitIcon, SettingsIcon, StarIcon } from './Icons';
 const MOBILE_NON_FROZEN_COLUMN_IDS = [
   'yesterdayChangePercent',
   'estimateChangePercent',
+  'totalChangePercent',
   'todayProfit',
   'holdingProfit',
   'latestNav',
@@ -37,8 +38,9 @@ const MOBILE_NON_FROZEN_COLUMN_IDS = [
 const MOBILE_COLUMN_HEADERS = {
   latestNav: '最新净值',
   estimateNav: '估算净值',
-  yesterdayChangePercent: '昨日涨跌幅',
-  estimateChangePercent: '估值涨跌幅',
+  yesterdayChangePercent: '昨日涨幅',
+  estimateChangePercent: '估值涨幅',
+  totalChangePercent: '估算收益',
   todayProfit: '当日收益',
   holdingProfit: '持有收益',
 };
@@ -294,6 +296,7 @@ export default function MobileFundTable({
     estimateNav: 64,
     yesterdayChangePercent: 72,
     estimateChangePercent: 80,
+    totalChangePercent: 80,
     todayProfit: 80,
     holdingProfit: 80,
   };
@@ -485,7 +488,7 @@ export default function MobileFundTable({
       },
       {
         accessorKey: 'yesterdayChangePercent',
-        header: '昨日涨跌幅',
+        header: '昨日涨幅',
         cell: (info) => {
           const original = info.row.original || {};
           const value = original.yesterdayChangeValue;
@@ -504,7 +507,7 @@ export default function MobileFundTable({
       },
       {
         accessorKey: 'estimateChangePercent',
-        header: '估值涨跌幅',
+        header: '估值涨幅',
         cell: (info) => {
           const original = info.row.original || {};
           const value = original.estimateChangeValue;
@@ -522,6 +525,36 @@ export default function MobileFundTable({
           );
         },
         meta: { align: 'right', cellClassName: 'est-change-cell', width: columnWidthMap.estimateChangePercent },
+      },
+      {
+        accessorKey: 'totalChangePercent',
+        header: '估算收益',
+        cell: (info) => {
+          const original = info.row.original || {};
+          const value = original.estimateProfitValue;
+          const hasProfit = value != null;
+          const cls = hasProfit ? (value > 0 ? 'up' : value < 0 ? 'down' : '') : 'muted';
+          const amountStr = hasProfit ? (original.estimateProfit ?? '') : '—';
+          const percentStr = original.estimateProfitPercent ?? '';
+
+          return (
+            <div style={{ width: '100%' }}>
+              <span className={cls} style={{ display: 'block', width: '100%', fontWeight: 700 }}>
+                <FitText maxFontSize={14} minFontSize={10}>
+                  {amountStr}
+                </FitText>
+              </span>
+              {percentStr ? (
+                <span className={`${cls} estimate-profit-percent`} style={{ display: 'block', width: '100%', fontSize: '0.75em', opacity: 0.9, fontWeight: 500 }}>
+                  <FitText maxFontSize={11} minFontSize={9}>
+                    {percentStr}
+                  </FitText>
+                </span>
+              ) : null}
+            </div>
+          );
+        },
+        meta: { align: 'right', cellClassName: 'total-change-cell', width: columnWidthMap.totalChangePercent },
       },
       {
         accessorKey: 'todayProfit',
@@ -689,7 +722,7 @@ export default function MobileFundTable({
 
   const getAlignClass = (columnId) => {
     if (columnId === 'fundName') return '';
-    if (['latestNav', 'estimateNav', 'yesterdayChangePercent', 'estimateChangePercent', 'todayProfit', 'holdingProfit'].includes(columnId)) return 'text-right';
+    if (['latestNav', 'estimateNav', 'yesterdayChangePercent', 'estimateChangePercent', 'totalChangePercent', 'todayProfit', 'holdingProfit'].includes(columnId)) return 'text-right';
     return 'text-right';
   };
 
