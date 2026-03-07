@@ -3181,7 +3181,7 @@ export default function HomePage() {
     try {
       const { data: meta, error: metaError } = await supabase
         .from('user_configs')
-        .select('id, updated_at')
+        .select(`id, updated_at${checkConflict ? ', data' : ''}`)
         .eq('user_id', userId)
         .maybeSingle();
 
@@ -3193,6 +3193,10 @@ export default function HomePage() {
           .insert({ user_id: userId });
         if (insertError) throw insertError;
         setCloudConfigModal({ open: true, userId, type: 'empty' });
+        return;
+      }
+      if (checkConflict) {
+        setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: meta.data });
         return;
       }
 
