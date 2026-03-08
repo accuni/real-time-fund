@@ -319,6 +319,7 @@ export default function HomePage() {
   const tabsRef = useRef(null);
   const [fundDeleteConfirm, setFundDeleteConfirm] = useState(null); // { code, name }
   const fundDetailDrawerCloseRef = useRef(null); // 由 MobileFundTable 注入，用于确认删除时关闭基金详情 Drawer
+  const fundDetailDialogCloseRef = useRef(null); // 由 PcFundTable 注入，用于确认删除时关闭基金详情 Dialog
 
   const todayStr = formatDate();
 
@@ -1558,9 +1559,12 @@ export default function HomePage() {
 
   const applyViewMode = useCallback((mode) => {
     if (mode !== 'card' && mode !== 'list') return;
+    if (mode !== viewMode) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     setViewMode(mode);
     storageHelper.setItem('viewMode', mode);
-  }, [storageHelper]);
+  }, [storageHelper, viewMode]);
 
   const toggleFavorite = (code) => {
     setFavorites(prev => {
@@ -2445,6 +2449,8 @@ export default function HomePage() {
     if (hasHolding) {
       setFundDeleteConfirm({ code: fund.code, name: fund.name });
     } else {
+      fundDetailDrawerCloseRef.current?.();
+      fundDetailDialogCloseRef.current?.();
       removeFund(fund.code);
     }
   };
@@ -4021,6 +4027,39 @@ export default function HomePage() {
                                   setPercentModes(prev => ({ ...prev, [row.code]: !prev[row.code] }));
                                 }}
                                 onCustomSettingsChange={triggerCustomSettingsSync}
+                                closeDialogRef={fundDetailDialogCloseRef}
+                                blockDialogClose={!!fundDeleteConfirm}
+                                getFundCardProps={(row) => {
+                                  const fund = row?.rawFund || (row ? { code: row.code, name: row.fundName } : null);
+                                  if (!fund) return {};
+                                  return {
+                                    fund,
+                                    todayStr,
+                                    currentTab,
+                                    favorites,
+                                    dcaPlans,
+                                    holdings,
+                                    percentModes,
+                                    valuationSeries,
+                                    collapsedCodes,
+                                    collapsedTrends,
+                                    transactions,
+                                    theme,
+                                    isTradingDay,
+                                    refreshing,
+                                    getHoldingProfit,
+                                    onRemoveFromGroup: removeFundFromCurrentGroup,
+                                    onToggleFavorite: toggleFavorite,
+                                    onRemoveFund: requestRemoveFund,
+                                    onHoldingClick: (f) => setHoldingModal({ open: true, fund: f }),
+                                    onActionClick: (f) => setActionModal({ open: true, fund: f }),
+                                    onPercentModeToggle: (code) =>
+                                      setPercentModes((prev) => ({ ...prev, [code]: !prev[code] })),
+                                    onToggleCollapse: toggleCollapse,
+                                    onToggleTrendCollapse: toggleTrendCollapse,
+                                    layoutMode: 'drawer',
+                                  };
+                                }}
                               />
                             </div>
                           </div>
@@ -4156,6 +4195,7 @@ export default function HomePage() {
             confirmText="确定删除"
             onConfirm={() => {
               fundDetailDrawerCloseRef.current?.();
+              fundDetailDialogCloseRef.current?.();
               removeFund(fundDeleteConfirm.code);
               setFundDeleteConfirm(null);
             }}
