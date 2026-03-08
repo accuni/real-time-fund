@@ -3179,13 +3179,15 @@ export default function HomePage() {
   const fetchCloudConfig = async (userId, checkConflict = false) => {
     if (!userId) return;
     try {
-      const { data: checkResult, error: checkError } = await supabase.functions.invoke(`check-data?userId=${userId}`, {
-        method: 'GET',
-      });
+      const { data: meta, error: metaError } = await supabase
+        .from('user_configs')
+        .select(`id, updated_at${checkConflict ? ', data' : ''}`)
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      if (checkError) throw checkError;
+      if (metaError) throw metaError;
 
-      if (checkResult.status === 'not_found') {
+      if (!meta?.id) {
         const { error: insertError } = await supabase
           .from('user_configs')
           .insert({ user_id: userId });
@@ -3193,9 +3195,13 @@ export default function HomePage() {
         setCloudConfigModal({ open: true, userId, type: 'empty' });
         return;
       }
+      if (checkConflict) {
+        setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: meta.data });
+        return;
+      }
 
-      if (checkResult.status === 'empty') {
-        setCloudConfigModal({ open: true, userId, type: 'empty' });
+      const localUpdatedAt = window.localStorage.getItem('localUpdatedAt');
+      if (localUpdatedAt && meta.updated_at && new Date(meta.updated_at) < new Date(localUpdatedAt)) {
         return;
       }
 
@@ -3203,7 +3209,7 @@ export default function HomePage() {
         .from('user_configs')
         .select('id, data, updated_at')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -3213,10 +3219,13 @@ export default function HomePage() {
         const cloudComparable = getComparablePayload(data.data);
 
         if (localComparable !== cloudComparable) {
+          // 如果数据不一致
           if (checkConflict) {
+            // 只有明确要求检查冲突时才提示（例如刚登录时）
             setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: data.data });
             return;
           }
+          // 否则直接覆盖本地（例如已登录状态下的刷新）
           await applyCloudConfig(data.data, data.updated_at);
           return;
         }
@@ -3948,7 +3957,7 @@ export default function HomePage() {
 
       <div className="grid">
         <div className="col-12">
-          <div ref={filterBarRef} className="filter-bar" style={{ top: isMobile ? undefined : navbarHeight , marginTop: navbarHeight, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div ref={filterBarRef} className="filter-bar" style={{ ...(isMobile ? {} : { top: navbarHeight }), marginTop: navbarHeight, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div className="tabs-container">
               <div
                 className="tabs-scroll-area"
