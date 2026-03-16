@@ -1007,31 +1007,40 @@ export default function PcFundTable({
           --row-bg: var(--bg);
           background-color: var(--row-bg) !important;
         }
-
-        /* 斑马纹行背景（非 hover 状态） */
         .table-row-scroll:nth-child(even),
         .table-row-scroll.row-even {
           background-color: var(--table-row-alt-bg) !important;
         }
+        .table-row-scroll:hover {
+          --row-bg: var(--table-row-hover-bg);
+          background-color: var(--row-bg) !important;
+        }
 
-        /* Pinned cells 继承所在行的背景（非 hover 状态） */
+        /* Pinned cells inherit from parent row */
         .table-row-scroll .pinned-cell {
           background-color: var(--row-bg) !important;
         }
         .table-row-scroll:nth-child(even) .pinned-cell,
-        .table-row-scroll.row-even .pinned-cell,
+        .table-row-scroll.row-even .pinned-cell {
+          background-color: var(--table-row-alt-bg) !important;
+        }
+        .table-row-scroll:hover .pinned-cell {
+          background-color: var(--table-row-hover-bg) !important;
+        }
+        .table-row-scroll:nth-child(even) {
+          background-color: var(--table-row-alt-bg);
+        }
+        .table-row-scroll:hover {
+          --row-bg: var(--table-row-hover-bg);
+        }
+
+        /* Pinned cells in even rows */
         .row-even .pinned-cell {
           background-color: var(--table-row-alt-bg) !important;
         }
 
-        /* Hover 状态优先级最高，覆盖斑马纹和 pinned 背景 */
-        .table-row-scroll:hover,
-        .table-row-scroll.row-even:hover {
-          --row-bg: var(--table-row-hover-bg);
-          background-color: var(--table-row-hover-bg) !important;
-        }
-        .table-row-scroll:hover .pinned-cell,
-        .table-row-scroll.row-even:hover .pinned-cell {
+        /* Pinned cells on hover */
+        .table-row-scroll:hover .pinned-cell {
           background-color: var(--table-row-hover-bg) !important;
         }
 
