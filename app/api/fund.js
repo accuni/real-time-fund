@@ -341,8 +341,12 @@ export const fetchFundData = async (c) => {
             let name = '';
             let weight = '';
             if (idxCode >= 0 && tds[idxCode]) {
-              const m = tds[idxCode].match(/(\d{6})/);
-              code = m ? m[1] : tds[idxCode];
+              const raw = String(tds[idxCode] || '').trim();
+              const mA = raw.match(/(\d{6})/);
+              const mHK = raw.match(/(\d{5})/);
+              // 海外股票常见为英文代码（如 AAPL / usAAPL / TSLA.US / 0700.HK）
+              const mAlpha = raw.match(/\b([A-Za-z]{1,10})\b/);
+              code = mA ? mA[1] : (mHK ? mHK[1] : (mAlpha ? mAlpha[1].toUpperCase() : raw));
             } else {
               const codeIdx = tds.findIndex(txt => /^\d{6}$/.test(txt));
               if (codeIdx >= 0) code = tds[codeIdx];
@@ -365,20 +369,67 @@ export const fetchFundData = async (c) => {
             }
           }
           holdings = holdings.slice(0, 10);
-          const needQuotes = holdings.filter(h => /^\d{6}$/.test(h.code) || /^\d{5}$/.test(h.code));
+          const normalizeTencentCode = (input) => {
+            const raw = String(input || '').trim();
+            if (!raw) return null;
+            // already normalized tencent styles (normalize prefix casing)
+            const mPref = raw.match(/^(us|hk|sh|sz|bj)(.+)$/i);
+            if (mPref) {
+              const p = mPref[1].toLowerCase();
+              const rest = String(mPref[2] || '').trim();
+              // usAAPL / usIXIC: rest use upper; hk00700 keep digits
+              return `${p}${/^\d+$/.test(rest) ? rest : rest.toUpperCase()}`;
+            }
+            const mSPref = raw.match(/^s_(sh|sz|bj|hk)(.+)$/i);
+            if (mSPref) {
+              const p = mSPref[1].toLowerCase();
+              const rest = String(mSPref[2] || '').trim();
+              return `s_${p}${/^\d+$/.test(rest) ? rest : rest.toUpperCase()}`;
+            }
+
+            // A股/北证
+            if (/^\d{6}$/.test(raw)) {
+              const pfx =
+                raw.startsWith('6') || raw.startsWith('9')
+                  ? 'sh'
+                  : raw.startsWith('4') || raw.startsWith('8')
+                    ? 'bj'
+                    : 'sz';
+              return `s_${pfx}${raw}`;
+            }
+            // 港股（数字）
+            if (/^\d{5}$/.test(raw)) return `s_hk${raw}`;
+
+            // 形如 0700.HK / 00001.HK
+            const mHkDot = raw.match(/^(\d{4,5})\.(?:HK)$/i);
+            if (mHkDot) return `s_hk${mHkDot[1].padStart(5, '0')}`;
+
+            // 形如 AAPL / TSLA.US / AAPL.O / BRK.B（腾讯接口对“.”支持不稳定，优先取主代码）
+            const mUsDot = raw.match(/^([A-Za-z]{1,10})(?:\.[A-Za-z]{1,6})$/);
+            if (mUsDot) return `us${mUsDot[1].toUpperCase()}`;
+            if (/^[A-Za-z]{1,10}$/.test(raw)) return `us${raw.toUpperCase()}`;
+
+            return null;
+          };
+
+          const getTencentVarName = (tencentCode) => {
+            const cd = String(tencentCode || '').trim();
+            if (!cd) return '';
+            // s_* uses v_s_*
+            if (/^s_/i.test(cd)) return `v_${cd}`;
+            // us/hk/sh/sz/bj uses v_{code}
+            return `v_${cd}`;
+          };
+
+          const needQuotes = holdings
+            .map((h) => ({
+              h,
+              tencentCode: normalizeTencentCode(h.code),
+            }))
+            .filter((x) => Boolean(x.tencentCode));
           if (needQuotes.length) {
             try {
-              const tencentCodes = needQuotes.map(h => {
-                const cd = String(h.code || '');
-                if (/^\d{6}$/.test(cd)) {
-                  const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
-                  return `s_${pfx}${cd}`;
-                }
-                if (/^\d{5}$/.test(cd)) {
-                  return `s_hk${cd}`;
-                }
-                return null;
-              }).filter(Boolean).join(',');
+              const tencentCodes = needQuotes.map((x) => x.tencentCode).join(',');
               if (!tencentCodes) {
                 resolveH(holdings);
                 return;
@@ -388,22 +439,15 @@ export const fetchFundData = async (c) => {
                 const scriptQuote = document.createElement('script');
                 scriptQuote.src = quoteUrl;
                 scriptQuote.onload = () => {
-                  needQuotes.forEach(h => {
-                    const cd = String(h.code || '');
-                    let varName = '';
-                    if (/^\d{6}$/.test(cd)) {
-                      const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
-                      varName = `v_s_${pfx}${cd}`;
-                    } else if (/^\d{5}$/.test(cd)) {
-                      varName = `v_s_hk${cd}`;
-                    } else {
-                      return;
-                    }
-                    const dataStr = window[varName];
+                  needQuotes.forEach(({ h, tencentCode }) => {
+                    const varName = getTencentVarName(tencentCode);
+                    const dataStr = varName ? window[varName] : null;
                     if (dataStr) {
                       const parts = dataStr.split('~');
-                      if (parts.length > 5) {
-                        h.change = parseFloat(parts[5]);
+                      const isUS = /^us/i.test(String(tencentCode || ''));
+                      const idx = isUS ? 32 : 5;
+                      if (parts.length > idx) {
+                        h.change = parseFloat(parts[idx]);
                       }
                     }
                   });
@@ -676,7 +720,7 @@ const snapshotPingzhongdataGlobals = (fundCode) => {
   };
 };
 
-const jsonpLoadPingzhongdata = (fundCode, timeoutMs = 10000) => {
+const jsonpLoadPingzhongdata = (fundCode, timeoutMs = 20000) => {
   return new Promise((resolve, reject) => {
     if (typeof document === 'undefined' || !document.body) {
       reject(new Error('无浏览器环境'));
@@ -770,23 +814,62 @@ export const fetchFundHistory = async (code, range = '1m') => {
     default: start = start.subtract(1, 'month');
   }
 
-  // 业绩走势统一走 pingzhongdata.Data_netWorthTrend
+  // 业绩走势统一走 pingzhongdata.Data_netWorthTrend，
+  // 同时附带 Data_grandTotal（若存在，格式为 [{ name, data: [[ts, val], ...] }, ...]）
   try {
     const pz = await fetchFundPingzhongdata(code);
     const trend = pz?.Data_netWorthTrend;
+    const grandTotal = pz?.Data_grandTotal;
+
     if (Array.isArray(trend) && trend.length) {
       const startMs = start.startOf('day').valueOf();
-      // end 可能是当日任意时刻，这里用 end-of-day 包含最后一天
       const endMs = end.endOf('day').valueOf();
-      const out = trend
-        .filter((d) => d && typeof d.x === 'number' && d.x >= startMs && d.x <= endMs)
+
+      // 若起始日没有净值，则往前推到最近一日有净值的数据作为有效起始
+      const validTrend = trend
+        .filter((d) => d && typeof d.x === 'number' && Number.isFinite(Number(d.y)) && d.x <= endMs)
+        .sort((a, b) => a.x - b.x);
+      const startDayEndMs = startMs + 24 * 60 * 60 * 1000 - 1;
+      const hasPointOnStartDay = validTrend.some((d) => d.x >= startMs && d.x <= startDayEndMs);
+      let effectiveStartMs = startMs;
+      if (!hasPointOnStartDay) {
+        const lastBeforeStart = validTrend.filter((d) => d.x < startMs).pop();
+        if (lastBeforeStart) effectiveStartMs = lastBeforeStart.x;
+      }
+
+      const out = validTrend
+        .filter((d) => d.x >= effectiveStartMs && d.x <= endMs)
         .map((d) => {
           const value = Number(d.y);
-          if (!Number.isFinite(value)) return null;
           const date = dayjs(d.x).tz(TZ).format('YYYY-MM-DD');
           return { date, value };
-        })
-        .filter(Boolean);
+        });
+
+      // 解析 Data_grandTotal 为多条对比曲线，使用同一有效起始日
+      if (Array.isArray(grandTotal) && grandTotal.length) {
+        const grandTotalSeries = grandTotal
+          .map((series) => {
+            if (!series || !series.data || !Array.isArray(series.data)) return null;
+            const name = series.name || '';
+            const points = series.data
+              .filter((item) => Array.isArray(item) && typeof item[0] === 'number')
+              .map(([ts, val]) => {
+                if (ts < effectiveStartMs || ts > endMs) return null;
+                const numVal = Number(val);
+                if (!Number.isFinite(numVal)) return null;
+                const date = dayjs(ts).tz(TZ).format('YYYY-MM-DD');
+                return { ts, date, value: numVal };
+              })
+              .filter(Boolean);
+            if (!points.length) return null;
+            return { name, points };
+          })
+          .filter(Boolean);
+
+        if (grandTotalSeries.length) {
+          out.grandTotalSeries = grandTotalSeries;
+        }
+      }
 
       if (out.length) return out;
     }

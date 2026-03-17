@@ -217,12 +217,37 @@ export default function HomePage() {
       }
 
       if (rulesFromSettings && rulesFromSettings.length) {
-        const merged = DEFAULT_SORT_RULES.map((rule) => {
-          const found = rulesFromSettings.find((r) => r.id === rule.id);
-          return found
-            ? { ...rule, enabled: found.enabled !== false }
-            : rule;
+        // 1）先按本地存储的顺序还原（包含 alias、enabled 等字段）
+        const defaultMap = new Map(
+          DEFAULT_SORT_RULES.map((rule) => [rule.id, rule])
+        );
+        const merged = [];
+
+        // 先遍历本地配置，保持用户自定义的顺序和别名/开关
+        for (const stored of rulesFromSettings) {
+          const base = defaultMap.get(stored.id);
+          if (!base) continue;
+          merged.push({
+            ...base,
+            // 只用本地的 enabled / alias 等个性化字段，基础 label 仍以内置为准
+            enabled:
+              typeof stored.enabled === "boolean"
+                ? stored.enabled
+                : base.enabled,
+            alias:
+              typeof stored.alias === "string" && stored.alias.trim()
+                ? stored.alias.trim()
+                : base.alias,
+          });
+        }
+
+        // 再把本次版本新增、但本地还没记录过的规则追加到末尾
+        DEFAULT_SORT_RULES.forEach((rule) => {
+          if (!merged.some((r) => r.id === rule.id)) {
+            merged.push(rule);
+          }
         });
+
         setSortRules(merged);
       }
 
@@ -3140,9 +3165,10 @@ export default function HomePage() {
   const fetchCloudConfig = async (userId, checkConflict = false) => {
     if (!userId) return;
     try {
+      // 一次查询同时拿到 meta 与 data，方便两种模式复用
       const { data: meta, error: metaError } = await supabase
         .from('user_configs')
-        .select(`id, updated_at${checkConflict ? ', data' : ''}`)
+        .select('id, data, updated_at')
         .eq('user_id', userId)
         .maybeSingle();
 
@@ -3156,44 +3182,19 @@ export default function HomePage() {
         setCloudConfigModal({ open: true, userId, type: 'empty' });
         return;
       }
+
+      // 冲突检查模式：使用 meta.data 弹出冲突确认弹窗
       if (checkConflict) {
         setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: meta.data });
         return;
       }
 
-      const localUpdatedAt = window.localStorage.getItem('localUpdatedAt');
-      if (localUpdatedAt && meta.updated_at && new Date(meta.updated_at) < new Date(localUpdatedAt)) {
+      // 非冲突检查模式：直接复用上方查询到的 meta 数据，覆盖本地
+      if (meta.data && isPlainObject(meta.data) && Object.keys(meta.data).length > 0) {
+        await applyCloudConfig(meta.data, meta.updated_at);
         return;
       }
 
-      const { data, error } = await supabase
-        .from('user_configs')
-        .select('id, data, updated_at')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data?.data && isPlainObject(data.data) && Object.keys(data.data).length > 0) {
-        const localPayload = collectLocalPayload();
-        const localComparable = getComparablePayload(localPayload);
-        const cloudComparable = getComparablePayload(data.data);
-
-        if (localComparable !== cloudComparable) {
-          // 如果数据不一致
-          if (checkConflict) {
-            // 只有明确要求检查冲突时才提示（例如刚登录时）
-            setCloudConfigModal({ open: true, userId, type: 'conflict', cloudData: data.data });
-            return;
-          }
-          // 否则直接覆盖本地（例如已登录状态下的刷新）
-          await applyCloudConfig(data.data, data.updated_at);
-          return;
-        }
-
-        await applyCloudConfig(data.data, data.updated_at);
-        return;
-      }
       setCloudConfigModal({ open: true, userId, type: 'empty' });
     } catch (e) {
       console.error('获取云端配置失败', e);
@@ -3694,7 +3695,7 @@ export default function HomePage() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="search-dropdown glass"
+                  className="search-dropdown glass scrollbar-y-styled"
                 >
                   {searchResults.length > 0 ? (
                     <div className="search-results">
