@@ -118,7 +118,7 @@ export default function GroupSummary({
 
       if (profit) {
         hasHolding = true;
-        totalAsset += profit.amount;
+        totalAsset += Math.round(profit.amount * 100) / 100;
         if (profit.profitToday != null) {
           // 先累加原始当日收益，最后统一做一次四舍五入，避免逐笔四舍五入造成的总计误差
           totalProfitToday += profit.profitToday;
