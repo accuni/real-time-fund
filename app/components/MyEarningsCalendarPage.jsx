@@ -6,6 +6,13 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Drawer,
   DrawerClose,
   DrawerContent,
@@ -55,7 +62,7 @@ function earningsClass(v) {
   return '';
 }
 
-export default function MyEarningsCalendarPage({ open, onOpenChange, series = [], masked, onGoHome }) {
+export default function MyEarningsCalendarPage({ open, onOpenChange, series = [], masked, onGoHome, isMobile }) {
   const reduceMotion = useReducedMotion();
 
   const hasData = Array.isArray(series) && series.length > 0;
@@ -160,26 +167,13 @@ export default function MyEarningsCalendarPage({ open, onOpenChange, series = []
         ? cursorYear >= now.year()
         : false;
 
-  return (
-    <Drawer open={!!open} onOpenChange={onOpenChange}>
-      <DrawerContent
-        className={cn('my-earnings-drawer-content flex max-h-[96vh] flex-col gap-0 p-0')}
-        defaultHeight="92vh"
-        maxHeight="96vh"
-        minHeight="44vh"
-      >
-        <DrawerHeader className="flex-shrink-0 flex flex-row items-center justify-between gap-2 space-y-0 px-5 pb-3 pt-2 text-left">
-          <DrawerTitle className="text-base font-semibold text-[var(--text)]">我的收益</DrawerTitle>
-          <DrawerClose
-            className="icon-button border-none bg-transparent p-1"
-            title="关闭"
-            style={{ borderColor: 'transparent', backgroundColor: 'transparent' }}
-          >
-            <CloseIcon width="20" height="20" />
-          </DrawerClose>
-        </DrawerHeader>
+  const resolvedIsMobile =
+    typeof isMobile === 'boolean'
+      ? isMobile
+      : (typeof window !== 'undefined' ? window.matchMedia?.('(max-width: 640px)')?.matches : false);
 
-        <div className="my-earnings-drawer-inner flex min-h-0 flex-1 flex-col overflow-hidden px-5">
+  const content = (
+    <div className="my-earnings-drawer-inner flex min-h-0 flex-1 flex-col overflow-hidden px-5">
           {hasData && (
             <div className="my-earnings-context-header shrink-0 pb-3">
               <div
@@ -419,7 +413,54 @@ export default function MyEarningsCalendarPage({ open, onOpenChange, series = []
         )}
           </div>
         </div>
-      </DrawerContent>
-    </Drawer>
+  );
+
+  if (resolvedIsMobile) {
+    return (
+      <Drawer open={!!open} onOpenChange={onOpenChange}>
+        <DrawerContent
+          className={cn('my-earnings-drawer-content flex max-h-[96vh] flex-col gap-0 p-0')}
+          defaultHeight="92vh"
+          maxHeight="96vh"
+          minHeight="44vh"
+        >
+          <DrawerHeader className="flex-shrink-0 flex flex-row items-center justify-between gap-2 space-y-0 px-5 pb-3 pt-2 text-left">
+            <DrawerTitle className="text-base font-semibold text-[var(--text)]">我的收益</DrawerTitle>
+            <DrawerClose
+              className="icon-button border-none bg-transparent p-1"
+              title="关闭"
+              style={{ borderColor: 'transparent', backgroundColor: 'transparent' }}
+            >
+              <CloseIcon width="20" height="20" />
+            </DrawerClose>
+          </DrawerHeader>
+          {content}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Dialog open={!!open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className={cn('my-earnings-drawer-content flex max-h-[92vh] w-[min(650px,calc(100vw-24px))] flex-col gap-0 overflow-hidden p-0')}
+      >
+        <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between gap-2 space-y-0 px-5 pb-3 pt-4 text-left border-b border-[var(--border)]">
+          <DialogTitle className="text-base font-semibold text-[var(--text)]">我的收益</DialogTitle>
+          <DialogClose asChild>
+            <button
+              type="button"
+              className="icon-button border-none bg-transparent p-1"
+              title="关闭"
+              style={{ borderColor: 'transparent', backgroundColor: 'transparent' }}
+            >
+              <CloseIcon width="20" height="20" />
+            </button>
+          </DialogClose>
+        </DialogHeader>
+        {content}
+      </DialogContent>
+    </Dialog>
   );
 }

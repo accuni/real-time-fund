@@ -20,6 +20,7 @@ import {
   CloseIcon,
   EyeIcon,
   EyeOffIcon,
+  CalendarIcon,
   GridIcon,
   ListIcon,
   LoginIcon,
@@ -5342,6 +5343,18 @@ export default function HomePage() {
                         </div>
                       </div>
                       <div className="user-menu-divider" />
+                      {!isMobile && (
+                        <button
+                          className="user-menu-item"
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            setPortfolioEarningsOpen(true);
+                          }}
+                        >
+                          <CalendarIcon width="16" height="16" />
+                          <span>我的收益</span>
+                        </button>
+                      )}
                       <button
                         className="user-menu-item"
                         disabled={isSyncing}
@@ -5392,6 +5405,18 @@ export default function HomePage() {
                         <LoginIcon width="16" height="16" />
                         <span>登录</span>
                       </button>
+                      {!isMobile && (
+                        <button
+                          className="user-menu-item"
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            setPortfolioEarningsOpen(true);
+                          }}
+                        >
+                          <CalendarIcon width="16" height="16" />
+                          <span>我的收益</span>
+                        </button>
+                      )}
                       <button
                         className="user-menu-item"
                         onClick={() => {
@@ -5932,8 +5957,60 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      <div className="footer">
-      </div>
+        <div className="footer">
+          {!isMobile && (
+            <>
+              <p style={{ marginBottom: 8 }}>数据源：实时估值与重仓直连东方财富，仅供个人学习及参考使用。数据可能存在延迟，不作为任何投资建议</p>
+              <p style={{ marginBottom: 12 }}>注：估算数据与真实结算数据会有1%左右误差，非股票型基金误差较大</p>
+              <div style={{ marginTop: 12, opacity: 0.8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <p style={{ margin: 0 }}>
+                  遇到任何问题或需求建议可
+                  <button
+                    className="link-button"
+                    onClick={() => {
+                      if (!user?.id) {
+                        sonnerToast.error('请先登录后再提交反馈');
+                        return;
+                      }
+                      setFeedbackNonce((n) => n + 1);
+                      setFeedbackOpen(true);
+                    }}
+                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline', fontSize: 'inherit', fontWeight: 600 }}
+                  >
+                    点此提交反馈
+                  </button>
+                </p>
+                <button
+                  onClick={() => setDonateOpen(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--muted)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--primary)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--muted)';
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <span>☕</span>
+                  <span>点此请作者喝杯咖啡</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </>
       )}
       {isMobile && mobileMainTab === 'mine' && (
@@ -5976,6 +6053,7 @@ export default function HomePage() {
         onOpenChange={setPortfolioEarningsOpen}
         series={portfolioDailySeries}
         masked={maskAmounts}
+        isMobile={isMobile}
         onGoHome={() => {
           setPortfolioEarningsOpen(false);
           setMobileMainTab('home');
