@@ -210,7 +210,8 @@ export default function PcFundTable({
   const groupKey = currentTab ?? 'all';
 
   const isGroupTab = currentTab && currentTab !== 'all' && currentTab !== 'fav';
-  const batchRemoveEnabled = isGroupTab && sortBy === 'default';
+  // 批量删除：之前仅自定义分组支持，这里扩展到「全部 / 自选 / 自定义分组」
+  const batchRemoveEnabled = sortBy === 'default' && (currentTab === 'all' || currentTab === 'fav' || isGroupTab);
   const selectableCodes = useMemo(
     () => (Array.isArray(data) ? data.map((d) => d?.code).filter(Boolean) : []),
     [data],
@@ -220,6 +221,10 @@ export default function PcFundTable({
   useEffect(() => {
     setSelectedCodes(new Set());
   }, [currentTab]);
+
+  useEffect(() => {
+    if (!batchRemoveEnabled) setSelectedCodes(new Set());
+  }, [batchRemoveEnabled]);
 
   useEffect(() => {
     setSelectedCodes((prev) => {
@@ -627,6 +632,37 @@ export default function PcFundTable({
     return () => { cancelled = true; };
   }, [relatedSectorEnabled, data, relatedSectorByCode]);
 
+  const withRelatedSectorFund = useCallback(
+    (row) => {
+      if (!row || !row.code) return row;
+      const rawValue = relatedSectorByCode?.[row.code] ?? relatedSectorCacheRef.current.get(row.code) ?? '';
+      const relatedSector = rawValue != null ? String(rawValue).trim() : '';
+      const quote = relatedSector ? sectorQuoteByLabel?.[relatedSector] : null;
+      const quoteName = quote?.name != null ? String(quote.name).trim() : '';
+      const quotePct = quote?.pct == null ? null : Number(quote.pct);
+      const hasQuotePct = quotePct != null && Number.isFinite(quotePct);
+
+      return {
+        ...row,
+        rawFund: {
+          ...(row.rawFund || { code: row.code, name: row.fundName }),
+          relatedSector,
+          relatedSectorQuoteName: quoteName,
+          relatedSectorQuotePct: hasQuotePct ? quotePct : null,
+        },
+      };
+    },
+    [relatedSectorByCode, sectorQuoteByLabel],
+  );
+
+  const getFundCardPropsWithRelatedSector = useCallback(
+    (row) => {
+      if (!getFundCardProps) return {};
+      return getFundCardProps(withRelatedSectorFund(row));
+    },
+    [getFundCardProps, withRelatedSectorFund],
+  );
+
   const periodReturnsEnabled =
     columnVisibility?.period1w !== false
     || columnVisibility?.period1m !== false
@@ -708,19 +744,7 @@ export default function PcFundTable({
 
     return (
       <div className="name-cell-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}>
-        {sortBy === 'default' && (
-          <button
-            className="icon-button drag-handle"
-            ref={rowContext?.setActivatorNodeRef}
-            {...rowContext?.listeners}
-            style={{ cursor: 'grab', width: 20, height: 20, padding: 2, margin: '0', flexShrink: 0, color: 'var(--muted)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="拖拽排序"
-            onClick={(e) => e.stopPropagation?.()}
-          >
-            <DragIcon width="16" height="16" />
-          </button>
-        )}
-        {batchRemoveEnabled && (
+                {batchRemoveEnabled && (
           <label
             title="选择用于批量删除"
             onClick={(e) => e.stopPropagation?.()}
@@ -749,7 +773,19 @@ export default function PcFundTable({
             />
           </label>
         )}
-        {!isGroupTab ? (
+        {sortBy === 'default' && (
+          <button
+            className="icon-button drag-handle"
+            ref={rowContext?.setActivatorNodeRef}
+            {...rowContext?.listeners}
+            style={{ cursor: 'grab', width: 20, height: 20, padding: 2, margin: '0', flexShrink: 0, color: 'var(--muted)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            title="拖拽排序"
+            onClick={(e) => e.stopPropagation?.()}
+          >
+            <DragIcon width="16" height="16" />
+          </button>
+        )}
+        {!isGroupTab && !batchRemoveEnabled ? (
           <button
             className={`icon-button fav-button ${isFavorites ? 'active' : ''}`}
             onClick={(e) => {
@@ -1738,7 +1774,12 @@ export default function PcFundTable({
         )}
       </div>
       {!!(cardDialogRow && getFundCardProps) && (
-        <FundDetailDialog blockDialogClose={blockDialogClose} cardDialogRow={cardDialogRow} getFundCardProps={getFundCardProps} setCardDialogRow={setCardDialogRow} />
+        <FundDetailDialog
+          blockDialogClose={blockDialogClose}
+          cardDialogRow={cardDialogRow}
+          getFundCardProps={getFundCardPropsWithRelatedSector}
+          setCardDialogRow={setCardDialogRow}
+        />
       )}
       <PcTableSettingModal
         open={settingModalOpen}
