@@ -579,6 +579,8 @@ export default function HomePage() {
   }, []);
 
   const [mobileMainTab, setMobileMainTab] = useState('home');
+  const [mobileBottomNavHidden, setMobileBottomNavHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
   const [portfolioEarningsOpen, setPortfolioEarningsOpen] = useState(false);
   const [mobileFundDrawerOpen, setMobileFundDrawerOpen] = useState(false);
   const [mobileTableSettingModalOpen, setMobileTableSettingModalOpen] = useState(false);
@@ -5057,6 +5059,43 @@ export default function HomePage() {
   }, [isAnyModalOpen]);
 
   useEffect(() => {
+    if (!isMobile || mobileMainTab !== 'home' || isAnyModalOpen) return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          const lastScrollY = lastScrollYRef.current;
+          const scrollDelta = currentScrollY - lastScrollY;
+          const threshold = 10;
+
+          if (scrollDelta > threshold && currentScrollY > 50) {
+            setMobileBottomNavHidden(true);
+          } else if (scrollDelta < -threshold) {
+            setMobileBottomNavHidden(false);
+          } else if (currentScrollY <= 0) {
+            setMobileBottomNavHidden(false);
+          }
+
+          lastScrollYRef.current = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobile, mobileMainTab, isAnyModalOpen]);
+
+  useEffect(() => {
+    if (!isMobile || mobileMainTab !== 'home') {
+      setMobileBottomNavHidden(false);
+    }
+  }, [isMobile, mobileMainTab]);
+
+  useEffect(() => {
     const onKey = (ev) => {
       if (ev.key === 'Escape' && settingsOpen) setSettingsOpen(false);
     };
@@ -6095,7 +6134,7 @@ export default function HomePage() {
         />
       )}
       {isMobile && !isAnyModalOpen && (
-        <MobileBottomNav value={mobileMainTab} onChange={setMobileMainTab} />
+        <MobileBottomNav value={mobileMainTab} onChange={setMobileMainTab} hidden={mobileBottomNavHidden && mobileMainTab === 'home'} />
       )}
 
       <AnimatePresence>
