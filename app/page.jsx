@@ -12,11 +12,19 @@ import timezone from 'dayjs/plugin/timezone';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import { isNumber, isString, isPlainObject } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
+import { toast as sonnerToast } from 'sonner';
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import Announcement from "./components/Announcement";
 import EmptyStateCard from "./components/EmptyStateCard";
 import FundCard from "./components/FundCard";
 import GroupSummary from "./components/GroupSummary";
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "@/components/ui/empty"
 import {
   CloseIcon,
   EyeIcon,
@@ -65,7 +73,6 @@ import MarketIndexAccordion from "./components/MarketIndexAccordion";
 import SortSettingModal from "./components/SortSettingModal";
 import githubImg from "./assets/github.svg";
 import { supabase, isSupabaseConfigured } from './lib/supabase';
-import { toast as sonnerToast } from 'sonner';
 import { recordValuation, getAllValuationSeries, clearFund } from './lib/valuationTimeseries';
 import {
   DAILY_EARNINGS_SCOPE_ALL,
@@ -84,13 +91,7 @@ import MineTab from './components/MineTab';
 import SearchFund from './components/SearchFund';
 import MyEarningsCalendarPage from './components/MyEarningsCalendarPage';
 import { useFundFuzzyMatcher } from './hooks/useFundFuzzyMatcher';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useUserStore, clearAuthUser, setAuthUser } from './stores';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -427,8 +428,8 @@ export default function HomePage() {
   // 全局隐藏金额状态（影响分组汇总、列表和卡片）
   const [maskAmounts, setMaskAmounts] = useState(false);
 
-  // 用户认证状态
-  const [user, setUser] = useState(null);
+  // 用户认证状态（Supabase 会话仍由客户端持久化；用户信息由 zustand 全局管理）
+  const user = useUserStore((s) => s.user);
   const [lastSyncTime, setLastSyncTime] = useState(null);
 
   useEffect(() => {
@@ -3117,12 +3118,12 @@ export default function HomePage() {
   // 初始化认证状态监听
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setUser(null);
+      clearAuthUser();
       setUserMenuOpen(false);
       return;
     }
     const clearAuthState = () => {
-      setUser(null);
+      clearAuthUser();
       setUserMenuOpen(false);
     };
 
@@ -3161,7 +3162,7 @@ export default function HomePage() {
         setLoginModalOpen(true);
         return;
       }
-      setUser(session.user);
+      setAuthUser(session.user);
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         setLoginModalOpen(false);
         setLoginEmail('');
@@ -3194,29 +3195,29 @@ export default function HomePage() {
   }, []);
 
   // 实时同步
-  // useEffect(() => {
-  //   if (!isSupabaseConfigured || !user?.id) return;
-  //   const channel = supabase
-  //     .channel(`user-configs-${user.id}`)
-  //     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
-  //       const incoming = payload?.new?.data;
-  //       if (!isPlainObject(incoming)) return;
-  //       const incomingComparable = getComparablePayload(incoming);
-  //       if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
-  //       await applyCloudConfig(incoming, payload.new.updated_at);
-  //     })
-  //     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
-  //       const incoming = payload?.new?.data;
-  //       if (!isPlainObject(incoming)) return;
-  //       const incomingComparable = getComparablePayload(incoming);
-  //       if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
-  //       await applyCloudConfig(incoming, payload.new.updated_at);
-  //     })
-  //     .subscribe();
-  //   return () => {
-  //     supabase.removeChannel(channel);
-  //   };
-  // }, [user?.id]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user?.id) return;
+    const channel = supabase
+      .channel(`user-configs-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
+        const incoming = payload?.new?.data;
+        if (!isPlainObject(incoming)) return;
+        const incomingComparable = getComparablePayload(incoming);
+        if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
+        await applyCloudConfig(incoming, payload.new.updated_at);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_configs', filter: `user_id=eq.${user.id}` }, async (payload) => {
+        const incoming = payload?.new?.data;
+        if (!isPlainObject(incoming)) return;
+        const incomingComparable = getComparablePayload(incoming);
+        if (!incomingComparable || incomingComparable === lastSyncedRef.current) return;
+        await applyCloudConfig(incoming, payload.new.updated_at);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -3326,7 +3327,7 @@ export default function HomePage() {
       setLoginEmail('');
       setLoginOtp('');
       setUserMenuOpen(false);
-      setUser(null);
+      clearAuthUser();
       return;
     }
     try {
@@ -3366,7 +3367,7 @@ export default function HomePage() {
       setLoginEmail('');
       setLoginOtp('');
       setUserMenuOpen(false);
-      setUser(null);
+      clearAuthUser();
     }
   };
 
@@ -3861,6 +3862,210 @@ export default function HomePage() {
     removeFundsBulk(list);
     showToast(`已删除 ${list.length} 支基金`, 'success');
     return true;
+  };
+
+  /**
+   * 批量迁移分组（含持仓/交易/待处理/定投等分组作用域数据）
+   *
+   * - fromTab: 'all' | 'fav' | groupId
+   * - targetId: 'all' | groupId
+   * - dryRun: 仅检测目标是否存在持仓数据冲突
+   * - overwrite: 冲突时是否覆盖目标持仓数据
+   */
+  const handleMoveFunds = async ({ codes, fromTab, targetId, dryRun = false, overwrite = false } = {}) => {
+    const list = Array.from(new Set((codes || []).filter(Boolean)));
+    if (list.length === 0) return { conflicts: [] };
+
+    const isCustomTab = (tab) => tab && tab !== 'all' && tab !== 'fav' && groups.some((g) => g?.id === tab);
+    const fromGid = isCustomTab(fromTab) ? fromTab : null;
+    const toGid = targetId && targetId !== 'all' ? targetId : null;
+
+    if (targetId === 'all') {
+      if (!fromGid) return { conflicts: [] };
+    } else {
+      if (!toGid || !groups.some((g) => g?.id === toGid)) return { conflicts: [] };
+      if (toGid === fromGid) return { conflicts: [] };
+    }
+
+    const conflicts = [];
+    for (const code of list) {
+      const hasTargetHolding = toGid
+        ? (groupHoldings?.[toGid]?.[code] != null)
+        : (holdings?.[code] != null);
+      if (hasTargetHolding) conflicts.push(code);
+    }
+    if (dryRun) return { conflicts };
+    if (!overwrite && conflicts.length > 0) return { conflicts };
+
+    // 1) groups.codes：维护基金所属分组（仅自定义分组）
+    if (fromGid || toGid) {
+      setGroups((prev) => {
+        const next = (prev || []).map((g) => {
+          if (!g?.id) return g;
+          if (fromGid && g.id === fromGid) {
+            return { ...g, codes: (g.codes || []).filter((c) => !list.includes(c)) };
+          }
+          if (toGid && g.id === toGid) {
+            return { ...g, codes: Array.from(new Set([...(g.codes || []), ...list])) };
+          }
+          return g;
+        });
+        storageHelper.setItem('groups', JSON.stringify(next));
+        return next;
+      });
+    }
+
+    // 2) holdings / groupHoldings：迁移持仓（支持覆盖确认）
+    setHoldings((prev) => {
+      const next = { ...(prev || {}) };
+
+      // all/fav -> group：从 global holdings 移出（目标持仓写入 groupHoldings）
+      if (!fromGid && toGid) {
+        for (const code of list) delete next[code];
+        storageHelper.setItem('holdings', JSON.stringify(next));
+        return next;
+      }
+
+      // group -> all：从 groupHoldings 写入 global holdings（并在 groupHoldings 中移除）
+      if (fromGid && !toGid) {
+        const fromBucket = groupHoldings?.[fromGid] || {};
+        let changed = false;
+        for (const code of list) {
+          const fromValue = fromBucket?.[code];
+          if (fromValue === undefined) continue;
+          if (overwrite || next[code] == null) {
+            next[code] = cloneHoldingDeep(fromValue) ?? fromValue;
+            changed = true;
+          }
+        }
+        if (!changed) return prev;
+        storageHelper.setItem('holdings', JSON.stringify(next));
+        return next;
+      }
+
+      // group<->group：global holdings 不参与
+      return prev;
+    });
+
+    setGroupHoldings((prev) => {
+      const next = { ...(prev || {}) };
+      const getBucket = (gid) => (next[gid] && typeof next[gid] === 'object' ? { ...next[gid] } : {});
+
+      // 读取源持仓
+      const sourceBucket = fromGid ? getBucket(fromGid) : null;
+      const targetBucket = toGid ? getBucket(toGid) : null;
+
+      if (toGid) next[toGid] = targetBucket;
+      if (fromGid) next[fromGid] = sourceBucket;
+
+      for (const code of list) {
+        const fromValue = fromGid
+          ? sourceBucket?.[code]
+          : holdings?.[code];
+
+        // 写入目标（仅在目标为自定义分组时）
+        if (toGid) {
+          if (overwrite || targetBucket?.[code] == null) {
+            targetBucket[code] = cloneHoldingDeep(fromValue) ?? fromValue ?? null;
+          }
+        }
+
+        // 移除源分组持仓（仅源为自定义分组时；all/fav -> group 的源在 setHoldings 中删）
+        if (fromGid && sourceBucket && code in sourceBucket) {
+          delete sourceBucket[code];
+        }
+      }
+
+      storageHelper.setItem('groupHoldings', JSON.stringify(next));
+      return next;
+    });
+
+    // 3) pendingTrades：迁移待处理队列（通过 groupId 归属作用域）
+    setPendingTrades((prev) => {
+      let changed = false;
+      const next = (prev || []).map((t) => {
+        if (!t?.fundCode) return t;
+        if (!list.includes(t.fundCode)) return t;
+        const inFromScope = fromGid ? t.groupId === fromGid : !t.groupId;
+        if (!inFromScope) return t;
+        changed = true;
+        if (toGid) return { ...t, groupId: toGid };
+        const { groupId, ...rest } = t;
+        return rest;
+      });
+      if (!changed) return prev;
+      storageHelper.setItem('pendingTrades', JSON.stringify(next));
+      return next;
+    });
+
+    // 4) transactions：迁移交易记录（通过 groupId 归属作用域）
+    setTransactions((prev) => {
+      const out = { ...(prev || {}) };
+      let changed = false;
+      for (const code of list) {
+        const arr = out?.[code];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        const nextArr = arr.map((tx) => {
+          if (!tx) return tx;
+          const inFromScope = fromGid ? tx.groupId === fromGid : !tx.groupId;
+          if (!inFromScope) return tx;
+          changed = true;
+          if (toGid) return { ...tx, groupId: toGid };
+          const { groupId, ...rest } = tx;
+          return rest;
+        });
+        out[code] = nextArr;
+      }
+      if (!changed) return prev;
+      storageHelper.setItem('transactions', JSON.stringify(out));
+      return out;
+    });
+
+    // 5) dcaPlans：迁移定投计划（按 scope 分桶）
+    setDcaPlans((prev) => {
+      const scoped = migrateDcaPlansToScoped(prev);
+      const fromKey = fromGid || DCA_SCOPE_GLOBAL;
+      const toKey = toGid || DCA_SCOPE_GLOBAL;
+      const fromBucket = scoped[fromKey] && typeof scoped[fromKey] === 'object' ? { ...scoped[fromKey] } : {};
+      const toBucket = scoped[toKey] && typeof scoped[toKey] === 'object' ? { ...scoped[toKey] } : {};
+      let changed = false;
+      for (const code of list) {
+        if (fromBucket[code] === undefined) continue;
+        toBucket[code] = fromBucket[code];
+        delete fromBucket[code];
+        changed = true;
+      }
+      if (!changed) return prev;
+      const nextScoped = { ...scoped, [fromKey]: fromBucket, [toKey]: toBucket };
+      storageHelper.setItem('dcaPlans', JSON.stringify(nextScoped));
+      return nextScoped;
+    });
+
+    // 6) fundDailyEarnings：每日收益序列（按 scope 分桶：all + 自定义分组 id）
+    setFundDailyEarnings((prev) => {
+      const fromKey = fromGid || DAILY_EARNINGS_SCOPE_ALL;
+      const toKey = toGid || DAILY_EARNINGS_SCOPE_ALL;
+      const base = isPlainObject(prev) ? prev : {};
+      const fromBucket = isPlainObject(base[fromKey]) ? { ...base[fromKey] } : {};
+      const toBucket = isPlainObject(base[toKey]) ? { ...base[toKey] } : {};
+      let changed = false;
+      for (const code of list) {
+        if (!(code in fromBucket)) continue;
+        if (!overwrite && (code in toBucket)) continue;
+        toBucket[code] = fromBucket[code];
+        delete fromBucket[code];
+        changed = true;
+      }
+      if (!changed) return prev;
+      const next = { ...base, [fromKey]: fromBucket, [toKey]: toBucket };
+      storageHelper.setItem('fundDailyEarnings', JSON.stringify(next));
+      return next;
+    });
+
+    // 迁移成功后切换到目标分组
+    setCurrentTab(targetId === 'all' ? 'all' : targetId);
+    showToast('分组迁移完成', 'success');
+    return { conflicts: [] };
   };
 
   const addFund = async (e) => {
@@ -6215,11 +6420,13 @@ export default function HomePage() {
                                 relatedSectorSessionKey={user?.id ?? ''}
                                 refreshing={refreshing}
                                 currentTab={currentTab}
+                                groups={groups}
                                 favorites={favorites}
                                 sortBy={sortBy}
                                 onReorder={handleReorder}
                                 onRemoveFund={handleRemoveFundRow}
                                 onRemoveFunds={(codes) => requestRemoveFundsFromCurrentGroup(codes)}
+                                onMoveFunds={handleMoveFunds}
                                 batchSelectionClearRef={pcBatchClearSelectionRef}
                                 onToggleFavorite={handleToggleFavoriteRow}
                                 onHoldingAmountClick={handleHoldingAmountClickRow}
@@ -6240,6 +6447,8 @@ export default function HomePage() {
                         relatedSectorSessionKey={user?.id ?? ''}
                         refreshing={refreshing}
                         currentTab={currentTab}
+                        groups={groups}
+                        onMoveFunds={handleMoveFunds}
                         favorites={favorites}
                         sortBy={sortBy}
                         stickyTop={navbarHeight + filterBarHeight + marketIndexAccordionHeight}
@@ -6381,7 +6590,7 @@ export default function HomePage() {
                 ? null
                 : (fundDeleteConfirm.otherGroups && fundDeleteConfirm.otherGroups.length > 0
                   ? <>
-                      基金 &#34{fundDeleteConfirm.name}&#34; 还存在于以下分组：
+                      基金 &#34;{fundDeleteConfirm.name}&#34; 还存在于以下分组：
                       <span className="text-[var(--primary)] font-semibold">
                         {fundDeleteConfirm.otherGroups.join('、')}
                       </span>
