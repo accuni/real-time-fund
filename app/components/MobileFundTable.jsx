@@ -114,14 +114,13 @@ function MobileEditBatchHeader({
   onRemove,
   onClose,
   hasMoveFunds,
-  refreshing,
 }) {
   const checkboxRef = useRef(null);
   useEffect(() => {
     if (checkboxRef.current) checkboxRef.current.indeterminate = !!indeterminate;
   }, [indeterminate]);
 
-  const actionsDisabled = refreshing || selectedCount === 0;
+  const actionsDisabled = selectedCount === 0;
 
   return (
     <div
@@ -296,7 +295,6 @@ function SortableRow({ row, children, isTableDragging, disabled }) {
  * @param {Set<string>} [props.favorites] - 自选集合
  * @param {(row: any) => void} [props.onToggleFavorite] - 添加/取消自选
  * @param {(row: any, meta: { hasHolding: boolean }) => void} [props.onHoldingAmountClick] - 点击持仓金额
- * @param {boolean} [props.refreshing] - 是否刷新中
  * @param {string} [props.sortBy] - 排序方式，'default' 时可长按行进入编辑模式并在编辑态拖动排序
  * @param {(oldIndex: number, newIndex: number) => void} [props.onReorder] - 编辑模式下「拖动」列排序回调
  * @param {(row: any) => Object} [props.getFundCardProps] - 给定行返回 FundCard 的 props；传入后点击基金名称将用底部弹框展示卡片视图
@@ -318,7 +316,6 @@ export default function MobileFundTable({
   onToggleFavorite,
   onHoldingAmountClick,
   onHoldingProfitClick, // 保留以兼容调用方，表格内已不再使用点击切换
-  refreshing = false,
   sortBy = 'default',
   onReorder,
   onCustomSettingsChange,
@@ -1045,16 +1042,14 @@ export default function MobileFundTable({
             className="icon-button"
             onClick={(e) => {
               e.stopPropagation?.();
-              if (refreshing) return;
               onRemoveFundRef.current?.(original);
             }}
             title="删除"
-            disabled={refreshing}
             style={{
               backgroundColor: 'transparent',
               flexShrink: 0,
-              opacity: refreshing ? 0.55 : 1,
-              cursor: refreshing ? 'not-allowed' : 'pointer',
+              opacity: 1,
+              cursor: 'pointer',
               border: 'none',
               height: 26,
               width: 26,
@@ -1170,12 +1165,11 @@ export default function MobileFundTable({
                   setMoveGroupOpen(true);
                 }}
                 onRemove={() => {
-                  if (selectedCount === 0 || refreshing) return;
+                  if (selectedCount === 0) return;
                   setBulkRemoveConfirmOpen(true);
                 }}
                 onClose={exitEditMode}
                 hasMoveFunds={!!onMoveFunds}
-                refreshing={refreshing}
               />
             );
           }
@@ -1208,10 +1202,8 @@ export default function MobileFundTable({
                 <button
                   type="button"
                   className="icon-button"
-                  disabled={refreshing}
                   onClick={(e) => {
                     e.stopPropagation?.();
-                    if (refreshing) return;
                     clearEditLongPressTimer();
                     setIsEditMode(true);
                     setEditSelectedCodes(new Set());
@@ -1224,13 +1216,13 @@ export default function MobileFundTable({
                     height: '28px',
                     minWidth: '28px',
                     backgroundColor: 'transparent',
-                    color: refreshing ? 'var(--muted)' : 'var(--text)',
+                    color: 'var(--text)',
                     flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: refreshing ? 0.45 : 1,
-                    cursor: refreshing ? 'not-allowed' : 'pointer',
+                    opacity: 1,
+                    cursor: 'pointer',
                   }}
                 >
                   <PencilIcon width="18" height="18" />
@@ -1260,7 +1252,7 @@ export default function MobileFundTable({
               <button
                 type="button"
                 className="link-button"
-                disabled={!canMove || refreshing}
+                disabled={!canMove}
                 title={idx <= 0 ? '已在最前' : '移到最前'}
                 style={{
                   fontSize: 12,
@@ -1268,12 +1260,12 @@ export default function MobileFundTable({
                   padding: '4px 6px',
                   border: 'none',
                   background: 'transparent',
-                  color: canMove && !refreshing ? 'var(--primary)' : 'var(--muted)',
-                  cursor: !canMove || refreshing ? 'not-allowed' : 'pointer',
+                  color: canMove ? 'var(--primary)' : 'var(--muted)',
+                  cursor: !canMove ? 'not-allowed' : 'pointer',
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!canMove || refreshing) return;
+                  if (!canMove) return;
                   onReorder(idx, 0);
                 }}
               >
@@ -1289,7 +1281,7 @@ export default function MobileFundTable({
         header: '拖动',
         cell: () => (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-            <EditDragHandleCell disabled={sortBy !== 'default' || refreshing} />
+            <EditDragHandleCell disabled={sortBy !== 'default'} />
           </div>
         ),
         meta: { align: 'center', cellClassName: 'mobile-edit-action-cell', width: columnWidthMap[EDIT_DRAG_COL] },
@@ -1675,7 +1667,6 @@ export default function MobileFundTable({
     [
       currentTab,
       favorites,
-      refreshing,
       columnWidthMap,
       showFullFundName,
       getFundCardProps,
@@ -1919,7 +1910,7 @@ export default function MobileFundTable({
                           onContextMenu={(e) => e.preventDefault()}
                           onDragStart={(e) => e.preventDefault()}
                           onPointerDown={(e) => {
-                            if (sortBy !== 'default' || isEditMode || refreshing) return;
+                            if (sortBy !== 'default' || isEditMode) return;
                             if (e.button !== 0 && e.pointerType === 'mouse') return;
                             const c = row.original?.code;
                             if (!c) return;
@@ -2046,7 +2037,7 @@ export default function MobileFundTable({
             fromTab={currentTab}
             groups={groups}
             selectedCodes={editSelectedCodesList}
-            disabled={refreshing || editSelectedCodes.size === 0}
+            disabled={editSelectedCodes.size === 0}
             onMoveFunds={async (payload) => {
               const res = await onMoveFunds?.(payload);
               if (payload?.dryRun) return res;

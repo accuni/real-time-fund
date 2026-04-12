@@ -3524,47 +3524,87 @@ export default function HomePage() {
     refreshingRef.current = true;
     setRefreshing(true);
     const uniqueCodes = Array.from(new Set(codes));
+    /** 从 localStorage 读取当前列表中的基金代码；解析失败时返回 null（调用方不做“已删除”过滤） */
+    const readStoredFundCodes = () => {
+      try {
+        const arr = JSON.parse(window.localStorage.getItem('funds') || '[]');
+        if (!Array.isArray(arr)) return null;
+        return new Set(arr.map((x) => x?.code).filter(Boolean));
+      } catch {
+        return null;
+      }
+    };
+    const fundCodeStillInStorage = (code) => {
+      if (!code) return false;
+      const s = readStoredFundCodes();
+      if (s === null) return true;
+      return s.has(code);
+    };
     try {
       const updated = [];
       for (const c of uniqueCodes) {
+        if (!fundCodeStillInStorage(c)) continue;
         try {
           const data = await fetchFundData(c);
-          updated.push(data);
+          // 请求完数据，检查数据是否存在，可能会有刷新前存在，刷新过程中被删除的情况
+          if (fundCodeStillInStorage(c)) {
+            updated.push(data);
+          }
         } catch (e) {
           console.error(`刷新基金 ${c} 失败`, e);
-          // 失败时从当前 state 中寻找旧数据
-          setFunds(prev => {
-            const old = prev.find((f) => f.code === c);
-            if (old) updated.push(old);
-            return prev;
-          });
+          // 失败时检查是否存在
+          if (fundCodeStillInStorage(c)) {
+            // 失败时从 localStorage 中寻找旧数据
+            try {
+              const arr = JSON.parse(window.localStorage.getItem('funds') || '[]');
+              const old = arr.find((f) => f.code === c);
+              if (old) updated.push(old);
+            } catch {
+              // ignore
+            }
+          }
         }
       }
 
       if (updated.length > 0) {
         setFunds(prev => {
-          // 将更新后的数据合并回当前最新的 state 中，防止覆盖掉刚刚导入的数据
-          const merged = [...prev];
-          updated.forEach(u => {
-            const idx = merged.findIndex(f => f.code === u.code);
-            if (idx > -1) {
-              merged[idx] = u;
-            } else {
-              merged.push(u);
-            }
+          const storedCodes = readStoredFundCodes();
+          const existingCodes =
+            storedCodes ?? new Set(prev.map((f) => f.code).filter(Boolean));
+          const merged = prev.filter((f) => existingCodes.has(f.code));
+          updated.forEach((u) => {
+            if (!u?.code || !existingCodes.has(u.code)) return;
+            const idx = merged.findIndex((f) => f.code === u.code);
+            if (idx > -1) merged[idx] = u;
+            else merged.push(u);
           });
           const deduped = dedupeByCode(merged);
-          storageHelper.setItem('funds', JSON.stringify(deduped));
-          return deduped;
+          const verifyCodes = readStoredFundCodes();
+          const finalFunds =
+            verifyCodes !== null ? deduped.filter((f) => f?.code && verifyCodes.has(f.code)) : deduped;
+          storageHelper.setItem('funds', JSON.stringify(finalFunds));
+          return finalFunds;
         });
         // 记录估值分时：每次刷新写入一条，新日期到来时自动清掉老日期数据
         const nextSeries = {};
         updated.forEach(u => {
+          if (!fundCodeStillInStorage(u?.code)) return;
           if (u?.code != null && !u.noValuation && Number.isFinite(Number(u.gsz))) {
+            // 请求返回与写入之间用户可能已删基金，写入前再读一次 localStorage
+            if (!fundCodeStillInStorage(u.code)) return;
             const val = recordValuation(u.code, { gsz: u.gsz, gztime: u.gztime });
             nextSeries[u.code] = val;
           }
         });
+        const seriesCodesOk = readStoredFundCodes();
+        if (seriesCodesOk !== null) {
+          Object.keys(nextSeries).forEach((code) => {
+            if (!seriesCodesOk.has(code)) {
+              clearFund(code);
+              delete nextSeries[code];
+            }
+          });
+        }
         if (Object.keys(nextSeries).length > 0) {
           setValuationSeries(prev => ({ ...prev, ...nextSeries }));
         }
@@ -3648,6 +3688,7 @@ export default function HomePage() {
           for (const u of updated) {
             const code = u?.code;
             if (!code) continue;
+            if (!fundCodeStillInStorage(code)) continue;
             const h = holdingsForTab?.[code];
             const share = h?.share;
             const cost = h?.cost;
@@ -3664,7 +3705,8 @@ export default function HomePage() {
             // 规则 3：如果每日收益没有任何一条数据，则仅需记录最新的净值的收益数据
             if (!existing.length) {
               const v = calcLatestDayFromFund(u, share, cost);
-              if (v && Number.isFinite(v.earnings)) {
+              if (v && Number.isFinite(v.earnings) && fundCodeStillInStorage(code)) {
+                if (!fundCodeStillInStorage(code)) continue;
                 const list = recordDailyEarnings(code, v.earnings, latestNavDate, v.rate, dailyEarningsScope);
                 nextDailyMap[code] = list;
                 changed = true;
@@ -3676,10 +3718,12 @@ export default function HomePage() {
                   if (Number.isFinite(nav) && nav > 0) {
                     const navCache = new Map([[latestNavDate, nav]]);
                     const prevNav = await findPrevTradingNav(code, latestNavDate, navCache, u);
+                    if (!fundCodeStillInStorage(code)) continue;
                     if (Number.isFinite(prevNav) && prevNav > 0) {
                       const earnings = calcEarningsFromNavs(nav, prevNav, share);
                       const rate = calcRateFromNavs(nav, prevNav, cost);
-                      if (Number.isFinite(earnings)) {
+                      if (Number.isFinite(earnings) && fundCodeStillInStorage(code)) {
+                        if (!fundCodeStillInStorage(code)) continue;
                         const list = recordDailyEarnings(code, earnings, latestNavDate, rate, dailyEarningsScope);
                         nextDailyMap[code] = list;
                         changed = true;
@@ -3702,6 +3746,7 @@ export default function HomePage() {
 
             const start = addDays(lastRecordedDate, 1);
             const navRows = await fetchFundNetValueRange(code, lastRecordedDate, latestNavDate);
+            if (!fundCodeStillInStorage(code)) continue;
             for (const r of navRows) {
               navCache.set(r.date, r.nav);
             }
@@ -3713,6 +3758,7 @@ export default function HomePage() {
               const prevNav = j > 0
                 ? navRows[j - 1].nav
                 : await findPrevTradingNav(code, navRows[j].date, navCache, u);
+              if (!fundCodeStillInStorage(code)) break;
               if (!Number.isFinite(prevNav) || prevNav <= 0) continue;
 
               const nav = navRows[j].nav;
@@ -3721,9 +3767,20 @@ export default function HomePage() {
 
               const earnings = calcEarningsFromNavs(nav, prevNav, share);
               const rate = calcRateFromNavs(nav, prevNav, cost);
-              if (Number.isFinite(earnings)) {
+              if (Number.isFinite(earnings) && fundCodeStillInStorage(code)) {
+                if (!fundCodeStillInStorage(code)) break;
                 const list = recordDailyEarnings(code, earnings, cursor, rate, dailyEarningsScope);
                 nextDailyMap[code] = list;
+                changed = true;
+              }
+            }
+          }
+          const storedForEarnings = readStoredFundCodes();
+          if (storedForEarnings !== null) {
+            for (const code of Object.keys(nextDailyMap)) {
+              if (!storedForEarnings.has(code)) {
+                clearDailyEarnings(code, dailyEarningsScope);
+                delete nextDailyMap[code];
                 changed = true;
               }
             }
@@ -3731,8 +3788,10 @@ export default function HomePage() {
           if (changed) {
             nextScopedDailyMap[dailyEarningsScope] = nextDailyMap;
             setFundDailyEarnings(nextScopedDailyMap);
-            const raw = localStorage.getItem('fundDailyEarnings') || '{}';
-            storageHelper.setItem('fundDailyEarnings', raw);
+            storageHelper.setItem(
+              'fundDailyEarnings',
+              window.localStorage.getItem('fundDailyEarnings') || '{}',
+            );
           }
         } catch (e) {
           console.warn('记录每日收益失败', e);
@@ -5648,10 +5707,9 @@ export default function HomePage() {
     .join(' ');
 
   const handleRemoveFundRow = useCallback((row) => {
-    if (refreshing) return;
     if (!row || !row.code) return;
     requestRemoveFund({ code: row.code, name: row.fundName });
-  }, [refreshing, requestRemoveFund]);
+  }, [requestRemoveFund]);
 
   const handleToggleFavoriteRow = useCallback((row) => {
     if (!row || !row.code) return;
@@ -5703,7 +5761,6 @@ export default function HomePage() {
       transactions: transactionsForTab,
       theme,
       isTradingDay,
-      refreshing,
       getHoldingProfit,
       onToggleFavorite: toggleFavorite,
       onRemoveFund: requestRemoveFund,
@@ -5733,7 +5790,6 @@ export default function HomePage() {
     transactionsForTab,
     theme,
     isTradingDay,
-    refreshing,
     getHoldingProfit,
     toggleFavorite,
     requestRemoveFund,
@@ -5878,11 +5934,9 @@ export default function HomePage() {
               <button
                 className="button"
                 type="submit"
-                disabled={loading || refreshing}
+                disabled={loading}
                 onMouseDown={(e) => e.preventDefault()}
                 style={{
-                  pointerEvents: refreshing ? 'none' : 'auto',
-                  opacity: refreshing ? 0.6 : 1,
                   display: (isSearchFocused || selectedFunds.length > 0) ? 'inline-flex' : undefined,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -6150,7 +6204,6 @@ export default function HomePage() {
           onHeightChange={setMarketIndexAccordionHeight}
           isMobile={isMobile}
           onCustomSettingsChange={triggerCustomSettingsSync}
-          refreshing={refreshing}
         />
       )}
       <div className="grid">
@@ -6418,7 +6471,6 @@ export default function HomePage() {
                                 stickyTop={navbarHeight + marketIndexAccordionHeight + filterBarHeight}
                                 data={pcFundTableData}
                                 relatedSectorSessionKey={user?.id ?? ''}
-                                refreshing={refreshing}
                                 currentTab={currentTab}
                                 groups={groups}
                                 favorites={favorites}
@@ -6445,7 +6497,6 @@ export default function HomePage() {
                       <MobileFundTable
                         data={pcFundTableData}
                         relatedSectorSessionKey={user?.id ?? ''}
-                        refreshing={refreshing}
                         currentTab={currentTab}
                         groups={groups}
                         onMoveFunds={handleMoveFunds}
@@ -6460,7 +6511,6 @@ export default function HomePage() {
                         onHoldingAmountClick={handleHoldingAmountClickRow}
                         onHoldingProfitClick={handleHoldingProfitClickRow}
                         onBulkRemoveFundsConfirmed={(items) => {
-                          if (refreshing) return;
                           fundDetailDrawerCloseRef.current?.();
                           const gid =
                             currentTab !== 'all' && currentTab !== 'fav' && groups.some((g) => g.id === currentTab)
@@ -6512,7 +6562,6 @@ export default function HomePage() {
                               transactions={transactionsForTab}
                               theme={theme}
                               isTradingDay={isTradingDay}
-                              refreshing={refreshing}
                               getHoldingProfit={getHoldingProfit}
                               onToggleFavorite={toggleFavorite}
                               onRemoveFund={requestRemoveFund}

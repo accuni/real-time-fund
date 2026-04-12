@@ -156,7 +156,6 @@ function SortableRow({ row, children, isTableDragging, disabled, enableAnimation
  * @param {Set<string>} [props.favorites] - 自选集合
  * @param {(row: any) => void} [props.onToggleFavorite] - 添加/取消自选
  * @param {(row: any, meta: { hasHolding: boolean }) => void} [props.onHoldingAmountClick] - 点击持仓金额
- * @param {boolean} [props.refreshing] - 是否处于刷新状态（控制删除按钮禁用态）
  * @param {(row: any) => Object} [props.getFundCardProps] - 给定行返回 FundCard 的 props；传入后点击基金名称将用弹框展示卡片详情
  * @param {React.MutableRefObject<(() => void) | null>} [props.closeDialogRef] - 注入关闭弹框的方法，用于确认删除时关闭
  * @param {React.MutableRefObject<(() => void) | null>} [props.batchSelectionClearRef] - 注入清空批量选中状态的方法，用于父级批量删除二次确认成功后调用
@@ -177,7 +176,6 @@ export default function PcFundTable({
   onToggleFavorite,
   onHoldingAmountClick,
   onHoldingProfitClick, // 保留以兼容调用方，表格内已不再使用点击切换
-  refreshing = false,
   sortBy = 'default',
   onReorder,
   onCustomSettingsChange,
@@ -886,7 +884,7 @@ export default function PcFundTable({
                 if (!onMoveFunds || selectedCount === 0) return;
                 setMoveGroupOpen(true);
               }}
-              disabled={refreshing || selectedCount === 0}
+              disabled={selectedCount === 0}
             />
           );
         },
@@ -1444,7 +1442,6 @@ export default function PcFundTable({
 
           const handleClick = (e) => {
             e.stopPropagation?.();
-            if (refreshing) return;
             onRemoveFundRef.current?.(original);
           };
 
@@ -1454,12 +1451,11 @@ export default function PcFundTable({
                 className="icon-button danger"
                 onClick={handleClick}
                 title="删除"
-                disabled={refreshing}
                 style={{
                   width: '28px',
                   height: '28px',
-                  opacity: refreshing ? 0.6 : 1,
-                  cursor: refreshing ? 'not-allowed' : 'pointer',
+                  opacity: 1,
+                  cursor: 'pointer',
                 }}
               >
                 <TrashIcon width="14" height="14" />
@@ -1472,7 +1468,6 @@ export default function PcFundTable({
     [
       currentTab,
       favorites,
-      refreshing,
       sortBy,
       showFullFundName,
       getFundCardProps,
@@ -2001,7 +1996,7 @@ export default function PcFundTable({
           fromTab={currentTab}
           groups={groups}
           selectedCodes={selectedCodesList}
-          disabled={refreshing || selectedCount === 0}
+          disabled={selectedCount === 0}
           onMoveFunds={async (payload) => {
             const res = await onMoveFunds?.(payload);
             if (payload?.dryRun) return res;

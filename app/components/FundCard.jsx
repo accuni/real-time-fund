@@ -63,7 +63,6 @@ export default function FundCard({
   transactions,
   theme,
   isTradingDay,
-  refreshing,
   getHoldingProfit,
   onToggleFavorite,
   onRemoveFund,
@@ -176,14 +175,13 @@ export default function FundCard({
           <div className="row" style={{ gap: 4 }}>
             <button
               className="icon-button danger"
-              onClick={() => !refreshing && onRemoveFund?.(f)}
+              onClick={() => onRemoveFund?.(f)}
               title="删除"
-              disabled={refreshing}
               style={{
                 width: '28px',
                 height: '28px',
-                opacity: refreshing ? 0.6 : 1,
-                cursor: refreshing ? 'not-allowed' : 'pointer',
+                opacity: 1,
+                cursor: 'pointer',
               }}
             >
               <TrashIcon width="14" height="14" />
