@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v23';
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v24';
 
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
@@ -75,13 +75,11 @@ export default function Announcement() {
               <span>公告</span>
             </div>
             <div style={{ color: 'var(--text)', lineHeight: '1.6', fontSize: '15px', overflowY: 'auto', minHeight: 0, flex: 1, paddingRight: '4px' }}>
-              <p>v1.0.2 更新内容如下：</p>
-              <p>1. 新增分组搜索功能（可通过全局设置关闭）。</p>
-              <p>2. 交易记录弹框新增数据合并按钮（如果自定义分组交易数据缺失，可点击数据合并按钮进行合并）。</p>
-              <p>3. 调整默认列排序。</p>
-              <br/>
-              <p>感谢上月以下用户对本项目赞助支持（排名不分先后）。</p>
-              <p>y*w、s*、*李、l*r、钱程似锦、Y*u、*子、F、陈*n、z*g、小坏、*.、*枫、*z、aqara、Aimer、*L、**赛、**文、*彬</p>
+              <p>v1.1.0 更新内容如下：</p>
+              <p>1. 新增分组汇总。</p>
+              <p>2. 新增移动分组功能。</p>
+              <p>3. 移动端新增编辑模式（批量删除、批量移动分组、拖拽顺序）。</p>
+              <p>4. 取消删除和刷新竞态。</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>

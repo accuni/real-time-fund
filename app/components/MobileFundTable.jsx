@@ -28,7 +28,7 @@ import FitText from './FitText';
 import MobileFundCardDrawer from './MobileFundCardDrawer';
 import MobileSettingModal from './MobileSettingModal';
 import MoveGroupModal from './MoveGroupModal';
-import { CloseIcon, DragIcon, FolderPlusIcon, PencilIcon, SettingsIcon, StarIcon, TrashIcon } from './Icons';
+import { ArrowUpToLineIcon, CloseIcon, DragIcon, FolderPlusIcon, PencilIcon, SettingsIcon, StarIcon, TrashIcon } from './Icons';
 import { fetchFundPeriodReturns, fetchRelatedSectors, fetchRelatedSectorLiveQuote } from '@/app/api/fund';
 
 const EDIT_MOVE_TO_FRONT_COL = 'editMoveToFront';
@@ -1263,6 +1263,7 @@ export default function MobileFundTable({
                 className="link-button"
                 disabled={!canMove}
                 title={idx <= 0 ? '已在最前' : '移到最前'}
+                aria-label={idx <= 0 ? '已在最前' : '移到最前'}
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
@@ -1271,6 +1272,9 @@ export default function MobileFundTable({
                   background: 'transparent',
                   color: canMove ? 'var(--primary)' : 'var(--muted)',
                   cursor: !canMove ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1278,7 +1282,7 @@ export default function MobileFundTable({
                   onReorder(idx, 0);
                 }}
               >
-                置顶
+                <ArrowUpToLineIcon width={18} height={18} aria-hidden />
               </button>
             </div>
           );
