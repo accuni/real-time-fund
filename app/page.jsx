@@ -5706,6 +5706,9 @@ export default function HomePage() {
     .filter(Boolean)
     .join(' ');
 
+  /** 移动端底部 Tab 切换时保留首页 DOM，用显隐代替卸载 */
+  const mobileHomeTabVisible = !isMobile || mobileMainTab === 'home';
+
   const handleRemoveFundRow = useCallback((row) => {
     if (!row || !row.code) return;
     requestRemoveFund({ code: row.code, name: row.fundName });
@@ -5823,7 +5826,11 @@ export default function HomePage() {
           </motion.div>
         )}
       </AnimatePresence>
-      {(!isMobile || mobileMainTab === 'home') && (
+      <div
+        className="mobile-main-tab-panel mobile-main-tab-panel--home"
+        style={{ display: mobileHomeTabVisible ? 'contents' : 'none' }}
+        aria-hidden={!mobileHomeTabVisible || undefined}
+      >
       <>
       <Announcement />
       <div className="navbar glass" ref={navbarRef}>
@@ -6783,9 +6790,10 @@ export default function HomePage() {
           )}
         </div>
       </>
-      )}
-      {isMobile && mobileMainTab === 'mine' && (
+      </div>
+      {isMobile && (
         <MineTab
+          visible={mobileMainTab === 'mine'}
           user={user}
           userAvatar={userAvatar}
           lastSyncDisplay={lastSyncTime ? dayjs(lastSyncTime).format('MM-DD HH:mm') : null}
