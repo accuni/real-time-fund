@@ -1743,6 +1743,22 @@ export default function HomePage() {
         storageHelper.setItem('pendingTrades', JSON.stringify(next));
         return next;
       });
+
+      const dcaScope = gid || DCA_SCOPE_GLOBAL;
+      setDcaPlans((prev) => {
+        const scoped = migrateDcaPlansToScoped(prev);
+        if (!scoped[dcaScope]) return prev;
+        const next = { ...scoped };
+        const bucket = { ...next[dcaScope] };
+        delete bucket[code];
+        if (Object.keys(bucket).length === 0) {
+          delete next[dcaScope];
+        } else {
+          next[dcaScope] = bucket;
+        }
+        storageHelper.setItem('dcaPlans', JSON.stringify(next));
+        return next;
+      });
     }
     setClearConfirm(null);
   };
