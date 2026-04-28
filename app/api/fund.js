@@ -149,17 +149,27 @@ function normalizeEastmoneyScriptUrl(url) {
 }
 
 /** 东方财富 F10 / FundArchives 等 JSONP（window.apidata），不做缓存；由 loadScript / fetchQuery 控制 staleTime */
-function runEastmoneyF10ScriptForApidata(url) {
+function runEastmoneyF10ScriptForApidata(url, timeoutMs = 10000) {
   return new Promise((resolve) => {
     const script = document.createElement('script');
     script.src = url;
     script.async = true;
 
+    let done = false;
     const cleanup = () => {
+      done = true;
+      if (timer) clearTimeout(timer);
       if (document.body.contains(script)) document.body.removeChild(script);
     };
 
+    const timer = setTimeout(() => {
+      if (done) return;
+      cleanup();
+      resolve({ ok: false, error: '请求超时' });
+    }, timeoutMs);
+
     script.onload = () => {
+      if (done) return;
       cleanup();
       let apidata;
       try {
@@ -171,6 +181,7 @@ function runEastmoneyF10ScriptForApidata(url) {
     };
 
     script.onerror = () => {
+      if (done) return;
       cleanup();
       resolve({ ok: false, error: '数据加载失败' });
     };
@@ -810,7 +821,19 @@ export const fetchFundData = async (c) => {
               await new Promise((resQuote) => {
                 const scriptQuote = document.createElement('script');
                 scriptQuote.src = quoteUrl;
+                let quoteDone = false;
+                const cleanupQuote = () => {
+                  quoteDone = true;
+                  if (quoteTimer) clearTimeout(quoteTimer);
+                  if (document.body.contains(scriptQuote)) document.body.removeChild(scriptQuote);
+                };
+                const quoteTimer = setTimeout(() => {
+                  if (quoteDone) return;
+                  cleanupQuote();
+                  resQuote();
+                }, 10000);
                 scriptQuote.onload = () => {
+                  if (quoteDone) return;
                   needQuotes.forEach(({ h, tencentCode }) => {
                     const varName = getTencentVarName(tencentCode);
                     const dataStr = varName ? window[varName] : null;
@@ -823,11 +846,11 @@ export const fetchFundData = async (c) => {
                       }
                     }
                   });
-                  if (document.body.contains(scriptQuote)) document.body.removeChild(scriptQuote);
+                  cleanupQuote();
                   resQuote();
                 };
                 scriptQuote.onerror = () => {
-                  if (document.body.contains(scriptQuote)) document.body.removeChild(scriptQuote);
+                  cleanupQuote();
                   resQuote();
                 };
                 document.body.appendChild(scriptQuote);
@@ -910,7 +933,22 @@ export const searchFunds = async (val) => {
         const url = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(normalized)}&callback=${callbackName}&_=${Date.now()}`;
 
         return new Promise((resolve, reject) => {
+          let done = false;
+          const cleanup = () => {
+            done = true;
+            if (timer) clearTimeout(timer);
+            if (document.body.contains(script)) document.body.removeChild(script);
+          };
+
+          const timer = setTimeout(() => {
+            if (done) return;
+            cleanup();
+            delete window[callbackName];
+            reject(new Error('搜索请求超时'));
+          }, 10000);
+
           window[callbackName] = (data) => {
+            if (done) return;
             let results = [];
             if (data && data.Datas) {
               results = data.Datas.filter(d =>
@@ -919,6 +957,7 @@ export const searchFunds = async (val) => {
                 d.CATEGORYDESC === '基金'
               );
             }
+            cleanup();
             delete window[callbackName];
             resolve(results);
           };
@@ -927,10 +966,11 @@ export const searchFunds = async (val) => {
           script.src = url;
           script.async = true;
           script.onload = () => {
-            if (document.body.contains(script)) document.body.removeChild(script);
+            // Callback usually handles cleanup, but onload is a backup
           };
           script.onerror = () => {
-            if (document.body.contains(script)) document.body.removeChild(script);
+            if (done) return;
+            cleanup();
             delete window[callbackName];
             reject(new Error('搜索请求失败'));
           };
@@ -949,7 +989,20 @@ export const fetchShanghaiIndexDate = async () => {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `https://qt.gtimg.cn/q=sh000001&_t=${Date.now()}`;
+    let done = false;
+    const cleanup = () => {
+      done = true;
+      if (timer) clearTimeout(timer);
+      if (document.body.contains(script)) document.body.removeChild(script);
+    };
+    const timer = setTimeout(() => {
+      if (done) return;
+      cleanup();
+      reject(new Error('数据请求超时'));
+    }, 10000);
+
     script.onload = () => {
+      if (done) return;
       const data = window.v_sh000001;
       let dateStr = null;
       if (data) {
@@ -958,11 +1011,12 @@ export const fetchShanghaiIndexDate = async () => {
           dateStr = parts[30].slice(0, 8);
         }
       }
-      if (document.body.contains(script)) document.body.removeChild(script);
+      cleanup();
       resolve(dateStr);
     };
     script.onerror = () => {
-      if (document.body.contains(script)) document.body.removeChild(script);
+      if (done) return;
+      cleanup();
       reject(new Error('指数数据加载失败'));
     };
     document.body.appendChild(script);
@@ -1066,7 +1120,20 @@ export const fetchMarketIndices = async () => {
     const script = document.createElement('script');
     const codes = MARKET_INDEX_KEYS.map((item) => item.code).join(',');
     script.src = `https://qt.gtimg.cn/q=${codes}&_t=${Date.now()}`;
+    let done = false;
+    const cleanup = () => {
+      done = true;
+      if (timer) clearTimeout(timer);
+      if (document.body.contains(script)) document.body.removeChild(script);
+    };
+    const timer = setTimeout(() => {
+      if (done) return;
+      cleanup();
+      reject(new Error('数据请求超时'));
+    }, 10000);
+
     script.onload = () => {
+      if (done) return;
       const list = MARKET_INDEX_KEYS.map(({ name: defaultName, varKey, code }) => {
         const raw = window[varKey];
         const isGlobal = code.startsWith('gz');
@@ -1074,11 +1141,12 @@ export const fetchMarketIndices = async () => {
         if (!parsed) return { name: defaultName, code: '', price: 0, change: 0, changePercent: 0 };
         return { ...parsed, name: defaultName, code: varKey.replace('v_', '') };
       });
-      if (document.body.contains(script)) document.body.removeChild(script);
+      cleanup();
       resolve(list);
     };
     script.onerror = () => {
-      if (document.body.contains(script)) document.body.removeChild(script);
+      if (done) return;
+      cleanup();
       reject(new Error('指数数据加载失败'));
     };
     document.body.appendChild(script);
