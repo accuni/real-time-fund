@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageStore } from '../stores';
 
-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v1.3.2';
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v1.3.3';
 
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
@@ -78,12 +78,12 @@ export default function Announcement() {
               <span>公告</span>
             </div>
             <div style={{ color: 'var(--text)', lineHeight: '1.6', fontSize: '15px', overflowY: 'auto', minHeight: 0, flex: 1, paddingRight: '4px' }}>
-              <p>v1.3.2 更新内容如下：</p>
-              <p>1. 新增基金转换入口。</p>
-              <p>2. 全部分组下关联持仓快捷编辑。</p>
-              <p>3. 新增个性化设置同步。</p>
-              <p>4. 修复定投日期计算问题。</p>
-              <p>5. 优化刷新接口基金并发请求。</p>
+              <p>v1.3.3 更新内容如下：</p>
+              <p>1. 新增更多的排序列。</p>
+              <p>2. 表格模式表头支持点击排序。</p>
+              <p>3. 优化刷新速度。</p>
+              <p>4. 优化弹框展示。</p>
+              <p>5. 修复近1周、近1月等数据回显问题。</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
